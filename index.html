@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zaireeka Binaural Renderer</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #fff; --line: #d9dce1; --tx: #1d2125; --mut: #626b75;
+    --acc: #2f6fde; --ok: #217a3c; --err: #b42318; --field: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111418; --card: #1a1e24; --line: #2e343c; --tx: #e3e7ec; --mut: #96a0ab;
+            --acc: #6ea3ff; --ok: #5cc27a; --err: #ff7b6e; --field: #12161b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--tx); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .sub { color: var(--mut); margin: 0 0 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; color: var(--mut); }
+  .dirrow { display: grid; grid-template-columns: 110px auto 1fr; gap: 10px; align-items: center; padding: 3px 0; }
+  .btn, button { font: inherit; border: 1px solid var(--line); background: var(--field); color: var(--tx);
+                 border-radius: 6px; padding: 5px 12px; cursor: pointer; white-space: nowrap; }
+  .btn:hover, button:hover:not(:disabled) { border-color: var(--acc); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--acc); border-color: var(--acc); color: #fff; font-weight: 600; padding: 7px 22px; }
+  .status { color: var(--mut); overflow-wrap: anywhere; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); }
+  a { color: var(--acc); }
+  select, input[type=number], input[type=text] { font: inherit; background: var(--field); color: var(--tx);
+                               border: 1px solid var(--line); border-radius: 5px; padding: 3px 5px; }
+  input[type=number] { width: 78px; }
+  input[type=text] { width: 190px; }
+  label:has(input:disabled) { opacity: .55; }
+  .discwrap { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: flex-start; }
+  .tablewrap { overflow-x: auto; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .layout { margin: 0; }
+  .layout figcaption { font-size: 12px; color: var(--mut); max-width: 250px; }
+  #layout .ring { fill: none; stroke: var(--line); stroke-dasharray: 3 4; }
+  #layout .tick { stroke: var(--mut); }
+  #layout .compass { fill: var(--mut); font-size: 11px; }
+  #layout .head { fill: var(--field); stroke: var(--mut); stroke-width: 1.5; }
+  #layout .ray { stroke-width: 1.5; opacity: .55; }
+  #layout .dotlabel { fill: #fff; font-size: 10px; font-weight: 700; pointer-events: none; }
+  #layout .elev { fill: var(--tx); font-size: 9px; font-weight: 600; pointer-events: none; }
+  .noel .elcol, section:has(.noel) .hint .elcol { display: none; }
+  table { border-collapse: collapse; white-space: nowrap; }
+  th { text-align: left; font-weight: 500; color: var(--mut); font-size: 12px; padding: 0 10px 4px 0; }
+  td { padding: 3px 10px 3px 0; }
+  .hint { color: var(--mut); font-size: 12px; margin: 8px 0 0; }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center; }
+  .opts + .opts { margin-top: 8px; }
+  .opts label { display: inline-flex; gap: 6px; align-items: center; }
+  #tracks { max-width: 100%; }
+  .actions { display: flex; gap: 8px; align-items: center; margin: 4px 0 10px; }
+  progress { width: 100%; height: 8px; }
+  #progText { color: var(--mut); font-size: 12px; min-height: 1.4em; }
+  #log { white-space: pre-wrap; font: 12px/1.5 Consolas, ui-monospace, monospace; background: var(--field);
+         border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; height: 230px; overflow: auto; margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Zaireeka Binaural Renderer</h1>
+  <p class="sub">A browser-based binaural rendering tool for the Flaming Lips' 1997 experimental album, "Zaireeka".<br><br>Each of its eight songs consists of four sets of stereo tracks, one from each disc. While designed to be played simultaneously on four separate audio systems, this tool utilizes audio spatialisation for headphones (ASH) and binaural room impulse response (BRIR) data to simulate the full experience on a single pair of headphones.<br><br>Once you load up all the necessary files and choose an output directory, you can select from the available BRIR room data and then place each disc's audio tracks at one of the available "azimuths" (the horizontal angle from a reference cardinal direction, in this case, the direction you're facing). After the settings are in place and you hit "Generate", all four discs are rendered together, each channel placed as a virtual speaker with an ASH BRIR, and mixed to one headphone track.<br><br>The tool is designed to auto-sync all four tracks, but if you want to simulate the tracks being slightly out-of-sync, you can add an audio delay to any of the discs. You can also choose to either render the entire album or just a single track, normalize the audio (either track-by-track or for the album as a whole), or adjust the volume of any particular disc. This way, in keeping with the original spirit of the album, no single generated output is a "definitive" version of "Zaireeka" and you're encouraged to experiment with different rooms and speaker layouts to develop your own unique versions of the album.<br><br>This tool expects that you own and have downloaded a digital copy of the album (preferably in .flac format) and a BRIR dataset for ASH. Everything runs locally in the browser, no need to install any third-party applications or extensions.<br><br>WARNING: "This recording also contains frequencies not normally heard on commercial recordings and on rare occasion has caused the listener to become disoriented."</p>
+
+  <section class="card">
+    <div class="dirrow">
+      <span>Music folder</span>
+      <label class="btn">Browse...<input type="file" id="musicInput" webkitdirectory multiple hidden></label>
+      <span id="musicStatus" class="status">The album folder that contains Disc 1 … Disc 4 (FLAC, WAV, MP3, AAC/M4A or Ogg/Opus).</span>
+    </div>
+    <p class="hint" style="margin:2px 0 6px 120px">Don't have the album? Buy the official 4-disc digital release (24-bit/44.1 kHz, DRM-free) on <a href="https://www.qobuz.com/us-en/album/zaireeka-the-flaming-lips/nxoi58i2cl4hb" target="_blank" rel="noopener">Qobuz</a>. Download it, unzip it, then choose the album's folder above.</p>
+    <div class="dirrow">
+      <span>BRIR folder</span>
+      <label class="btn">Browse...<input type="file" id="brirInput" webkitdirectory multiple hidden></label>
+      <span id="brirStatus" class="status">The <code>BRIRs</code> folder of the ASH Listening Set or ASH-IR-Dataset (or a single room folder).</span>
+    </div>
+    <p class="hint" style="margin:2px 0 6px 120px">Don't have the BRIRs? Download the free <a href="https://github.com/ShanonPearce/ASH-Listening-Set/releases/latest" target="_blank" rel="noopener">ASH Listening Set</a> (<a href="https://github.com/ShanonPearce/ASH-Listening-Set/wiki/Room-and-Measurement-Summary" target="_blank" rel="noopener">room list</a>), unzip it, then choose its <code>BRIRs</code> folder above. It is the newer dataset: 35 rooms, several dummy heads and speaker distances, and heights above/below ear level in two rooms. The older <a href="https://github.com/ShanonPearce/ASH-IR-Dataset/releases/latest" target="_blank" rel="noopener">ASH-IR-Dataset</a> works too.</p>
+    <div class="dirrow">
+      <span>Output folder</span>
+      <button id="outBtn" type="button">Browse...</button>
+      <span id="outStatus" class="status">Not chosen: files go to your Downloads folder.</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="opts">
+      <label>Room <select id="room"></select></label>
+      <label id="configLabel" hidden>Measurement <select id="config"></select></label>
+    </div>
+    <p id="roomInfo" class="hint"></p>
+  </section>
+
+  <section class="card">
+    <h2>Discs (azimuth °: 0 = front, positive = right ear, negative = left ear)</h2>
+    <div class="discwrap"><div class="tablewrap"><table id="discTable" class="noel">
+      <thead><tr><th></th><th>Left az</th><th>Right az</th><th></th><th class="elcol">Height</th><th>Delay (ms)</th><th>Direct (dB)</th></tr></thead>
+      <tbody id="discRows"></tbody>
+    </table></div>
+    <figure class="layout">
+      <svg id="layout" viewBox="0 0 280 280" width="250" height="250" role="img" aria-label="Speaker layout seen from above"></svg>
+      <figcaption id="layoutCaption">Seen from above: you're in the middle, facing up. Hover over a dot to see its angle.</figcaption>
+    </figure></div>
+    <p class="hint">Direct: level of each disc's direct sound (first 2.5 ms of the BRIR) vs. the room reverb (+ = closer/clearer, − = further away), keeping its position. Delay: shifts a disc in time (negative = earlier).
+      <span class="elcol">Height: places the disc above or below ear level (only some rooms were measured at several heights).</span></p>
+  </section>
+
+  <section class="card">
+    <h2>Output</h2>
+    <div class="opts">
+      <label><input type="radio" name="mode" id="modeTracks" checked> Separate track files</label>
+      <label><input type="radio" name="mode" id="modeAlbum"> Single album file</label>
+      <label>Normalise <select id="normalize"><option value="album">album</option><option value="track">track</option></select></label>
+    </div>
+    <div class="opts">
+      <label>Format <select id="format">
+        <option value="flac24">FLAC 24-bit (lossless, recommended)</option>
+        <option value="flac16">FLAC 16-bit (CD quality, dithered)</option>
+        <option value="wav24">WAV 24-bit</option>
+        <option value="wav16">WAV 16-bit (CD quality, dithered)</option>
+        <option value="wav32f">WAV 32-bit float</option>
+      </select></label>
+      <label>Peak level <input type="number" id="ceiling" min="-20" max="0" step="0.1" value="-1"> dBFS</label>
+    </div>
+    <div class="opts">
+      <label>File name prefix <input type="text" id="prefix" value="Zaireeka_binaural" spellcheck="false"></label>
+      <label><input type="checkbox" id="cover" checked> Embed cover art <span id="coverNote" class="status"></span></label>
+      <label><input type="checkbox" id="cue" checked> Write a .cue sheet (track markers for the album file)</label>
+    </div>
+    <div class="opts">
+      <label><input type="checkbox" id="test"> Test: only the first <input type="number" id="testSeconds" min="1" max="600" step="1" value="10"> s of each track</label>
+      <label><input type="checkbox" id="measure"> Match full-album level (measure whole album if not yet known)</label>
+    </div>
+    <div class="opts">
+      <label>Tracks <select id="tracks"><option value="all">All tracks</option></select></label>
+    </div>
+    <p class="hint">Peak level: the loudest moment of the album (or track) is set to this level; −1 dBFS leaves headroom for later conversion to MP3/AAC. 16-bit output is dithered. FLAC files get full tags and cover art; WAV files get basic tags only.</p>
+  </section>
+
+  <div class="actions">
+    <button id="generate" class="primary" type="button">Generate</button>
+    <button id="cancel" type="button" disabled>Cancel</button>
+  </div>
+  <progress id="prog" max="1" value="0"></progress>
+  <div id="progText"></div>
+  <pre id="log"></pre>
+</main>
+
+<script>
+'use strict';
+const SR = 44100;
+// Source formats, best first. Decoding is done by the browser (decodeAudioData), which also resamples
+// other rates (e.g. 48 kHz AAC/Opus, 96 kHz FLAC) to 44.1 kHz. M4A may hold AAC or lossless ALAC.
+const AUDIO_FORMATS = ['flac', 'wav', 'wave', 'm4a', 'aac', 'opus', 'ogg', 'oga', 'mp3'];
+const AUDIO_EXT = new RegExp(`\\.(${AUDIO_FORMATS.join('|')})$`, 'i');
+const LOSSY_EXT = new Set(['aac', 'opus', 'ogg', 'oga', 'mp3']);
+const formatRank = (ext) => AUDIO_FORMATS.indexOf(ext.toLowerCase());
+const DIRECT_MS = 2.5;                      // direct-sound window after the first arrival
+const DIRECT_FADE_MS = 1.0;                 // raised-cosine fade at the end of the window
+const DEFAULT_ROOM = 'R32';
+const PREFERRED_AZ = [-30, 30, -145, 145];  // disc 1..4; nearest available is used
+const PEAK_CACHE_VERSION = 'browser-2';
+const SETTINGS_KEY = 'zaireeka-binaural-settings';
+const ARTIST = 'The Flaming Lips', ALBUM = 'Zaireeka';
+const VENDOR = 'Zaireeka binaural renderer (browser)';
+const DISC_COLORS = ['#e4572e', '#2f9e44', '#2f6fde', '#b04fd8'];
+const FORMATS = {
+  flac24: { ext: 'flac', bits: 24, flac: true, label: 'FLAC 24-bit' },
+  flac16: { ext: 'flac', bits: 16, flac: true, label: 'FLAC 16-bit (dithered)' },
+  wav24:  { ext: 'wav', bits: 24, label: 'WAV 24-bit' },
+  wav16:  { ext: 'wav', bits: 16, label: 'WAV 16-bit (dithered)' },
+  wav32f: { ext: 'wav', bits: 32, float: true, label: 'WAV 32-bit float' },
+};
+
+// From https://github.com/ShanonPearce/ASH-IR-Dataset/wiki/Room-Information
+const ROOM_INFO = {
+  R01: ['Room Calypso', 'TU Berlin', 'Listening room', '5.00 x 5.50 x 3.00', 0.170],
+  R02: ['Control Room 1', 'WDR Broadcast Studios', 'Control room', '6.85 x 5.48 x 2.47', 0.232],
+  R03: ['Listening Room', 'University of Salford', 'Listening room', '5.80 x 6.60 x 2.70', 0.261],
+  R04: ['Control Room 7', 'WDR Broadcast Studios', 'Control room', '7.26 x 8.26 x 2.90', 0.266],
+  R05A: ['Audio Lab', 'University of Rostock', 'Listening room / audio lab (with absorbers)', '5.00 x 5.75 x 3.00', 0.369],
+  R05B: ['Audio Lab', 'University of Rostock', 'Listening room / audio lab (without absorbers)', '5.00 x 5.75 x 3.00', 0.825],
+  R06: ['Seminar Room', 'TU Ilmenau', 'Seminar room', '5.00 x 5.00', 0.474],
+  R07: ['Conference Room', 'TU Ilmenau', 'Small conference room', '10.31 x 5.76 x 3.10', 0.411],
+  R08: ['Room Spirit', 'TU Berlin', 'Small meeting room', '5.50 x 4.50', 0.791],
+  R09: ['Adream Laboratory', 'LAAS-CNRS Toulouse', 'Apartment-like environment / laboratory', null, 0.815],
+  R10: ['Room Auditorium 3', 'TU Berlin', 'Lecture room / auditorium', '10.00 x 9.00', 0.464],
+  R11: ['Small Broadcast Studio', 'WDR Broadcast Studios', 'Small studio', '17.33 x 11.07 x 6.20', 0.969],
+  R12: ['Stairway', 'RWTH Aachen University', 'Stairway & corridor', null, 1.119],
+  R13: ['Office', 'University of Surrey', 'Medium-sized office', '5.72 x 6.64 x 2.30', 0.298],
+  R14: ['Classroom', 'University of Surrey', 'Medium–small classroom', '4.65 x 4.65 x 2.68', 0.350],
+  R15: ['Seminar Room', 'University of Surrey', 'Medium–large seminar/presentation space', '8.02 x 8.72 x 4.25', 0.953],
+  R16: ['Large Broadcast Studio', 'WDR Broadcast Studios', 'Large studio', '30.28 x 16.52 x 11.16', 1.179],
+  R17: ['Room HU201', 'TU Ilmenau', 'Seminar/presentation room (reduced reverberation)', null, 0.393],
+  R18: ['Rehabilitation Room', 'TU Ilmenau', 'Room for rehabilitation of hearing diseases', null, 0.460],
+  R19: ['Coupled Rooms', 'RWTH Aachen', 'Laboratory & reverberation chamber', null, 1.593],
+  R20: ['Seminar Room', 'RWTH Aachen', 'Seminar room', null, 1.308],
+  R21: ['Chamber Music Hall', 'Konzerthaus, Berlin', 'Medium-sized chamber music hall', null, 1.199],
+  R22: ['Large Room', null, 'Large-sized virtual room', null, 0.930],
+  R23: ['Small Room A', null, 'Small-sized virtual room', null, 0.350],
+  R24: ['Seminar Room', 'Room HFT616, TU Berlin', 'Virtual seminar room', null, 0.475],
+  R25: ['TV Studio', 'TU Ilmenau', 'TV studio', '19.50 x 11.50 x 5.50', 0.700],
+  R26: ['Small Room B', null, 'Small-sized virtual room', null, 0.350],
+  R27: ['Lecture Room A', null, 'Virtual lecture room', null, 0.754],
+  R28: ['Small Room C', null, 'Small-sized virtual room', null, 0.350],
+  R29: ['Studio A', null, 'Small-sized virtual studio', null, 0.694],
+  R30: ['Small Room D', null, 'Small-sized virtual room', null, 0.350],
+  R31: ['Studio B', null, 'Small-sized virtual studio', null, 0.680],
+  R32: ['Concert Hall', 'Promenadikeskus, Pori', 'Concert hall (reduced reverberation)', '33.00 x 23.00 x 15.00', 0.407],
+  R33: ['Studio C', null, 'Small-sized virtual studio', null, 0.682],
+  R34: ['Studio D', null, 'Small-sized virtual studio', null, 0.707],
+  R35: ['Small Room E', null, 'Small-sized virtual room', null, 0.350],
+  R36: ['Studio E', null, 'Small-sized virtual studio', null, 0.667],
+  R37: ['Lecture Room B', null, 'Virtual lecture room', null, 0.476],
+  R38: ['Small Room F', null, 'Small-sized virtual room', null, 0.427],
+  R39: ['Small Room G', null, 'Small-sized virtual room', null, 0.418],
+};
+
+// ASH Listening Set rooms (BRIRs/Rooms.csv of v9.6); replaced by the chosen folder's Rooms.csv when present.
+const LS_ROOM_INFO = {
+  R01: {"name": "Room Calypso", "loc": "TU Berlin", "type": "Listening room", "dims": "5.00 x 5.50 x 3.00", "reduced": "No", "rt60": "0.306", "listener": "KEMAR 45BA with large ears", "dist": "2.5", "azRange": "±180°", "elRange": "0°"},
+  R02: {"name": "Control Room 1", "loc": "WDR Broadcast Studios", "type": "Control room", "dims": "6.85 x 5.48 X 2.47", "reduced": "No", "rt60": "0.235", "listener": "Neumann KU100", "dist": "2.8", "azRange": "±180°", "elRange": "0°"},
+  R03: {"name": "Control Room 7", "loc": "WDR Broadcast Studios", "type": "Control room", "dims": "7.26 x 8.26 X 2.90", "reduced": "No", "rt60": "0.266", "listener": "Neumann KU100", "dist": "3", "azRange": "±180°", "elRange": "0°"},
+  R04: {"name": "Listening Room", "loc": "University of Salford", "type": "Listening room", "dims": "5.80 x 6.60 X 2.70", "reduced": "No", "rt60": "0.256", "listener": "B&K HATS Type 4100", "dist": "3.1", "azRange": "±180°", "elRange": "0°"},
+  R05: {"name": "Audio Lab", "loc": "University of Rostock", "type": "Listening room / audio lab", "dims": "5.00 x 5.75 x 3.00", "reduced": "Yes", "rt60": "0.442", "listener": "KEMAR 45BA with large ears", "dist": "2.5", "azRange": "±180°", "elRange": "0°"},
+  R06: {"name": "Seminar Room", "loc": "TU Ilmenau", "type": "Seminar room", "dims": "5.00 x 5.00", "reduced": "Yes", "rt60": "0.438", "listener": "KEMAR", "dist": "3", "azRange": "±180°", "elRange": "0°"},
+  R07: {"name": "Conference Room", "loc": "TU Ilmenau", "type": "Small conference room", "dims": "10.31 x 5.76 x 3.10", "reduced": "Yes", "rt60": "0.403", "listener": "KEMAR 45BA with large ears (C1,C2) and small ears (C3)", "dist": "2.5", "azRange": "±180°", "elRange": "0°"},
+  R08: {"name": "Room Spirit", "loc": "TU Berlin", "type": "Small meeting room", "dims": "5.50 x 4.50", "reduced": "Yes", "rt60": "0.367 (C1), 0.543 (C2)", "listener": "KEMAR 45BA with large ears", "dist": "2", "azRange": "±120°", "elRange": "0°"},
+  R09: {"name": "Adream Laboratory", "loc": "LAAS-CNRS Toulouse", "type": "Apartment-like environment / laboratory", "dims": "N/A", "reduced": "Yes", "rt60": "0.414 (C1), 0.702 (C2)", "listener": "KEMAR 45BB-4", "dist": "4.8", "azRange": "±90°", "elRange": "0°"},
+  R10: {"name": "Room Auditorium 3", "loc": "TU Berlin", "type": "Lecture room / auditorium", "dims": "10.00 x 9.00", "reduced": "Yes", "rt60": "0.422 (C1), 0.738 (C2)", "listener": "KEMAR 45BA with large ears", "dist": "4", "azRange": "±180°", "elRange": "0°"},
+  R11: {"name": "Small Broadcast Studio", "loc": "WDR Broadcast Studios", "type": "Small studio", "dims": "17.33 x 11.07 x 6.20", "reduced": "Yes", "rt60": "0.388 (C1), 0.697 (C2)", "listener": "Neumann KU100", "dist": "6.94", "azRange": "±180°", "elRange": "0°"},
+  R12: {"name": "Office", "loc": "University of Surrey", "type": "Medium-sized office", "dims": "5.72 x 6.64 x 2.30", "reduced": "Yes", "rt60": "0.351", "listener": "Neutrik Cortex mk.2 HATS", "dist": "1.5", "azRange": "±90°", "elRange": "0°"},
+  R13: {"name": "Classroom", "loc": "University of Surrey", "type": "Medium–small classroom", "dims": "4.65 x 4.65 X 2.68", "reduced": "Yes", "rt60": "0.363", "listener": "Neutrik Cortex mk.2 HATS", "dist": "1.5", "azRange": "±90°", "elRange": "0°"},
+  R14: {"name": "Seminar Room", "loc": "University of Surrey", "type": "Medium–large sized seminar/presentation space", "dims": "8.02 x 8.72 X 4.25", "reduced": "Yes", "rt60": "0.399 (C1), 0.654 (C2)", "listener": "Neutrik Cortex mk.2 HATS", "dist": "1.5", "azRange": "±90°", "elRange": "0°"},
+  R15: {"name": "Room HU201", "loc": "TU Ilmenau", "type": "Seminar/presentation room", "dims": "N/A", "reduced": "Yes", "rt60": "0.383 (C1), 0.688 (C2)", "listener": "Individual listener", "dist": "2.2", "azRange": "±180°", "elRange": "0°"},
+  R16: {"name": "Rehabilitation Room", "loc": "TU Ilmenau", "type": "Room for rehabilitation of hearing diseases", "dims": "N/A", "reduced": "Yes", "rt60": "0.399", "listener": "KEMAR 45BA with large ears", "dist": "2", "azRange": "±180°", "elRange": "0°"},
+  R17: {"name": "Coupled Rooms", "loc": "RWTH Aachen", "type": "Laboratory & reverberation chamber", "dims": "N/A", "reduced": "Yes", "rt60": "0.379", "listener": "FABIAN HATS", "dist": "3.97 (L), 3.01 (R)", "azRange": "±45°", "elRange": "0°"},
+  R18: {"name": "Small Room I", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.397", "listener": "B&K HATS Type 4128", "dist": "3", "azRange": "±180°", "elRange": "0°"},
+  R19: {"name": "TV Studio", "loc": "TU Ilmenau", "type": "TV Studio", "dims": "19.50 x 11.50 x 5.50", "reduced": "Yes", "rt60": "0.421 (C1), 0.585 (C2)", "listener": "KEMAR", "dist": "6.25", "azRange": "±180°", "elRange": "0°"},
+  R20: {"name": "Small Room A", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.368", "listener": "Neumann KU100", "dist": "4", "azRange": "±180°", "elRange": "0°"},
+  R21: {"name": "Small Room B", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.376", "listener": "KEMAR DB-4004 with normal ears", "dist": "4.12", "azRange": "±180°", "elRange": "0°"},
+  R22: {"name": "Small Room H", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.353", "listener": "KEMAR DB-4004 with normal ears", "dist": "3.91", "azRange": "±180°", "elRange": "0°"},
+  R23: {"name": "Small Room C", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.37", "listener": "Neumann KU100", "dist": "2.6", "azRange": "±180°", "elRange": "0°"},
+  R24: {"name": "Small Room D", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.332", "listener": "B&K HATS Type 4128", "dist": "3", "azRange": "±180°", "elRange": "0°"},
+  R25: {"name": "Small Room E", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.368", "listener": "Neumann KU100", "dist": "3", "azRange": "±180°", "elRange": "0°"},
+  R26: {"name": "Studio A", "loc": "N/A", "type": "Virtual studio", "dims": "N/A", "reduced": "No", "rt60": "0.408", "listener": "Neumann KU100", "dist": "3.82", "azRange": "±180°", "elRange": "0°"},
+  R27: {"name": "Lecture Room", "loc": "N/A", "type": "Virtual lecture room", "dims": "N/A", "reduced": "No", "rt60": "0.458", "listener": "Neumann KU100", "dist": "3.99", "azRange": "±180°", "elRange": "0°"},
+  R28: {"name": "Small Room F", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.433", "listener": "FABIAN HATS", "dist": "3.55", "azRange": "±180°", "elRange": "0°"},
+  R29: {"name": "Small Room G", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.428", "listener": "FABIAN HATS (C1), Neumann KU100 (C2)", "dist": "3.5", "azRange": "±180°", "elRange": "0°"},
+  R30: {"name": "Laboratory", "loc": "N/A", "type": "Virtual laboratory", "dims": "N/A", "reduced": "No", "rt60": "0.384", "listener": "Neumann KU100", "dist": "3.49 (C1), 2.18 (C2)", "azRange": "±180°", "elRange": "0°"},
+  R31: {"name": "Small Room J", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.427", "listener": "B&K HATS Type 4128 (C1), Neumann KU100 (C2)", "dist": "3.2", "azRange": "±180°", "elRange": "0°"},
+  R32: {"name": "ASH Listening Room", "loc": "N/A", "type": "Virtual listening room", "dims": "N/A", "reduced": "No", "rt60": "0.35", "listener": "Neumann KU100 (C1), KEMAR with large ears (C2), KEMAR with normal ears (C3), B&K HATS Type 4128 (C4)", "dist": "2.5", "azRange": "±180°", "elRange": "±60° (C1,C2), ±45° (C3), ±30° (C4)"},
+  R33: {"name": "Studio B", "loc": "N/A", "type": "Virtual studio", "dims": "N/A", "reduced": "No", "rt60": "0.393", "listener": "Neumann KU100", "dist": "3.8", "azRange": "±180°", "elRange": "0°"},
+  R34: {"name": "Small Room K", "loc": "N/A", "type": "Small-sized virtual room", "dims": "N/A", "reduced": "No", "rt60": "0.402", "listener": "KEMAR with normal ears (C1,C2), KEMAR with large ears (C3,C4), Neumann KU100 (C5,C6)", "dist": "2.5 (C1,C3,C5),3.5 (C2,C4,C6)", "azRange": "±180°", "elRange": "0°"},
+  R35: {"name": "Studio C", "loc": "N/A", "type": "Virtual studio", "dims": "N/A", "reduced": "No", "rt60": "0.44", "listener": "Neumann KU100 (C1), KEMAR with large ears (C2), KEMAR with normal ears (C3), B&K HATS Type 4128 (C4)", "dist": "4", "azRange": "±180°", "elRange": "±30°"},
+};
+
+const $ = (id) => document.getElementById(id);
+const state = { tracks: [], brirFiles: {}, rooms: {}, lsInfo: LS_ROOM_INFO, cover: null, coverPic: undefined, outDir: null, running: false, cancel: false };
+const DATASETS = { ls: 'ASH Listening Set', ir: 'ASH-IR-Dataset' };
+const irCache = new Map();
+class CancelError extends Error {}
+
+// ---- small helpers -----------------------------------------------------------
+const relPath = (f) => f.relPath || f.webkitRelativePath || f.name;
+const pad2 = (n) => String(n).padStart(2, '0');
+const safeFilename = (s) => s.replace(/[<>:"/\\|?*]/g, '_').trim().replace(/\.+$/, '');
+const fmtTime = (s) => `${Math.floor(s / 60)}:${pad2(Math.round(s % 60))}`;
+const stripDisc = (s) => s.replace(/\s*\((?:disc|disk|cd)\s*\d\)\s*$/i, '').trim();
+function log(msg) { const el = $('log'); el.textContent += msg + '\n'; el.scrollTop = el.scrollHeight; }
+function setProgress(frac, text) { $('prog').value = frac; $('progText').textContent = text || ''; }
+function checkCancel() { if (state.cancel) throw new CancelError('cancelled'); }
+// Yield to the browser without setTimeout, which is throttled to 1 s in background tabs.
+const yieldUI = () => new Promise((r) => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
+
+function describeIrRoom(room) {
+  const info = ROOM_INFO[room];
+  if (!info) return '';
+  const [name, loc, kind, dims, rt60] = info;
+  const parts = [name, loc || 'virtual room', kind];
+  if (dims) parts.push(`${dims} m`);
+  parts.push(`RT60 ${rt60.toFixed(3)} s`);
+  return parts.join(' · ');
+}
+
+// Rooms.csv fields such as "0.367 (C1), 0.543 (C2)" or "Neumann KU100 (C1), KEMAR (C2)" hold one value per measurement configuration; return the one for cfg (fields without "(Cn)" notes are returned whole).
+function forConfig(text, cfg) {
+  if (!text || !/\(C\d/.test(text)) return text;
+  const re = /\s*(?:,|\band\b)?\s*([^()]+?)\s*\(((?:C\d+\s*,?\s*)+)\)/g;
+  let m;
+  while ((m = re.exec(text))) if (m[2].split(',').map((c) => c.trim()).includes(cfg)) return m[1].trim();
+  return text;
+}
+const known = (v) => v && v !== 'N/A';
+
+function describeLsRoom(room, cfg) {
+  const i = state.lsInfo[room];
+  if (!i) return '';
+  const parts = [i.name, known(i.loc) ? i.loc : 'virtual room', i.type];
+  if (known(i.dims)) parts.push(i.dims.replace(/\s*[xX]\s*/g, ' x ') + ' m');
+  const rt = forConfig(i.rt60, cfg), lis = forConfig(i.listener, cfg), d = forConfig(i.dist, cfg);
+  if (known(rt)) parts.push(`RT60 ${rt} s${i.reduced === 'Yes' ? ' (reduced reverberation)' : ''}`);
+  if (known(lis)) parts.push(`dummy head: ${lis}`);
+  if (known(d)) parts.push(`speakers at ${d} m`);
+  return parts.join(' · ');
+}
+
+function describeRoom(r, cfg) {
+  if (!r) return '';
+  return (r.set === 'ir' ? describeIrRoom(r.room) : describeLsRoom(r.room, cfg)) + ` · ${DATASETS[r.set]}`;
+}
+
+function roomLabel(r) {
+  const name = r.set === 'ir' ? (ROOM_INFO[r.room] || [])[0] : (state.lsInfo[r.room] || {}).name;
+  return name ? `${r.room} · ${name}` : r.room;
+}
+
+function configLabel(r, cfg) {
+  const i = r.set === 'ls' && state.lsInfo[r.room];
+  if (!i) return cfg;
+  const bits = [forConfig(i.listener, cfg), known(forConfig(i.dist, cfg)) ? `${forConfig(i.dist, cfg)} m` : '',
+                known(forConfig(i.rt60, cfg)) ? `RT60 ${forConfig(i.rt60, cfg)} s` : ''].filter(known);
+  return bits.length ? `${cfg} · ${bits.join(', ')}` : cfg;
+}
+
+const elLabel = (e) => (e === 0 ? 'ear level' : e > 0 ? `${e}° up` : `${-e}° down`);
+const currentRoom = () => state.rooms[$('room').value];
+
+function nearest(azs, target) {
+  if (!azs.length) return '';
+  return azs.reduce((best, a) => {
+    const d = Math.abs(a - target), bd = Math.abs(best - target);
+    return d < bd || (d === bd && Math.abs(a) > Math.abs(best)) ? a : best;
+  });
+}
+
+// ---- settings persistence ----------------------------------------------------
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch { saved = {}; }
+const OUTPUT_FIELDS = { normalize: 'value', format: 'value', ceiling: 'value', prefix: 'value', testSeconds: 'value',
+                        cover: 'checked', cue: 'checked', test: 'checked', measure: 'checked' };
+
+function saveSettings() {
+  const discs = discRows.map((r) => ({ azL: r.want.azL, azR: r.want.azR, link: r.link.checked,
+                                       el: r.want.el, delay: r.delay.value, direct: r.direct.value }));
+  const out = {};
+  for (const [id, prop] of Object.entries(OUTPUT_FIELDS)) out[id] = $(id)[prop];
+  saved = { room: $('room').value || saved.room, config: $('config').value || saved.config, discs,
+            fullAlbum: $('modeAlbum').checked, ...out };
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(saved)); } catch { /* storage unavailable */ }
+}
+
+// ---- disc table --------------------------------------------------------------
+const discRows = [];
+for (let i = 0; i < 4; i++) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><span class="sw" style="background:${DISC_COLORS[i]}"></span>Disc ${i + 1}</td><td><select class="azL"></select></td><td><select class="azR"></select></td><td><label><input type="checkbox" class="link" checked> Link L/R</label></td><td class="elcol"><select class="el"></select></td><td><input type="number" class="delay" step="10" value="0"></td><td><input type="number" class="direct" min="-24" max="24" step="1" value="0"></td>`;
+  $('discRows').appendChild(tr);
+  const row = {};
+  for (const k of ['azL', 'azR', 'link', 'el', 'delay', 'direct']) row[k] = tr.querySelector('.' + k);
+  const s = (saved.discs || [])[i];
+  if (s) {
+    row.link.checked = s.link !== false;
+    for (const k of ['delay', 'direct']) if (s[k] !== undefined && s[k] !== '') row[k].value = s[k];
+  }
+  // The angles/height the user chose. A room without them snaps to the nearest available value, but the choice is kept, so switching back to a room that has it restores it.
+  row.want = {
+    azL: s && s.azL !== undefined && s.azL !== '' ? +s.azL : PREFERRED_AZ[i],
+    azR: s && s.azR !== undefined && s.azR !== '' ? +s.azR : PREFERRED_AZ[i],
+    el: s && s.el !== undefined && s.el !== '' ? +s.el : 0,
+  };
+  row.azR.disabled = row.link.checked;
+  row.azL.addEventListener('change', () => {
+    row.want.azL = +row.azL.value;
+    if (row.link.checked) { row.azR.value = row.azL.value; row.want.azR = row.want.azL; }
+  });
+  row.azR.addEventListener('change', () => { row.want.azR = +row.azR.value; });
+  row.link.addEventListener('change', () => {
+    row.azR.disabled = row.link.checked;
+    if (row.link.checked) { row.azR.value = row.azL.value; row.want.azR = row.want.azL; }
+  });
+  row.el.addEventListener('change', () => { row.want.el = +row.el.value; fillAzimuths(row); });
+  discRows.push(row);
+}
+if (saved.fullAlbum) $('modeAlbum').checked = true;
+for (const [id, prop] of Object.entries(OUTPUT_FIELDS)) {
+  if (saved[id] === undefined) continue;
+  if (id === 'format' && !FORMATS[saved[id]]) continue;
+  $(id)[prop] = saved[id];
+}
+
+function updateOutputControls() {
+  // Per-track gain inside one continuous file would jump at track boundaries.
+  const album = $('modeAlbum').checked;
+  if (album) $('normalize').value = 'album';
+  $('normalize').disabled = album;
+  $('cue').disabled = !album;
+  const flac = FORMATS[$('format').value].flac;
+  $('cover').disabled = !flac || !state.cover;
+  $('coverNote').textContent = !flac ? '(FLAC only)' : state.cover ? `(${state.cover.name})`
+    : state.tracks.length ? '(no cover image in the music folder)' : '';
+}
+for (const id of ['modeAlbum', 'modeTracks', 'format']) $(id).addEventListener('change', updateOutputControls);
+updateOutputControls();
+document.querySelector('main').addEventListener('change', () => { saveSettings(); drawLayout(); });
+
+// ---- folders -----------------------------------------------------------------
+function loadMusic(files) {
+  // Disc number comes from a "Disc N" / "CD N" folder, or from "(Disc N)" in the file name
+  // (store downloads often put all 32 tracks in one folder). Track number = leading digits,
+  // skipping a disc prefix such as "1-01" or "01-01".
+  // Any format the browser can decode is accepted. If a folder holds the same track in several
+  // formats, the best one is used (lossless first).
+  const found = [new Map(), new Map(), new Map(), new Map()];
+  const covers = [];
+  let root = '';
+  for (const f of files) {
+    const p = relPath(f);
+    const parts = p.split('/'), name = parts[parts.length - 1];
+    const cm = name.match(/^(cover|front|folder)\.(jpe?g|png)$/i);
+    if (cm) { covers.push({ f, rank: ['cover', 'front', 'folder'].indexOf(cm[1].toLowerCase()) * 10 + parts.length }); continue; }
+    const ext = (name.match(AUDIO_EXT) || [])[1];
+    if (!ext || name.startsWith('._')) continue;
+    const dir = parts.slice(0, -1).join('/');
+    const dm = dir.match(/(?:^|\/)(?:disc|disk|cd)\s*0?([1-4])(?:\/|$)/i) || name.match(/\((?:disc|disk|cd)\s*([1-4])\)/i);
+    const tm = name.match(/^(?:0?[1-4][-_.])?(\d{1,2})(?!\d)/);
+    if (!dm || !tm) continue;
+    const t = { file: f, num: parseInt(tm[1], 10), name, ext: ext.toLowerCase() };
+    const m = found[dm[1] - 1], old = m.get(t.num);
+    if (!old || formatRank(t.ext) < formatRank(old.ext)) m.set(t.num, t);
+    if (!root) root = parts.length > 1 ? parts[0] : '';
+  }
+  const discs = found.map((m) => [...m.values()].sort((a, b) => a.num - b.num));
+  covers.sort((a, b) => a.rank - b.rank);
+  state.cover = covers.length ? covers[0].f : null;
+  state.coverPic = undefined;
+  const counts = discs.map((d) => d.length);
+  const st = $('musicStatus');
+  state.tracks = [];
+  if (counts.some((c) => c === 0)) {
+    st.textContent = 'Couldn\'t find audio tracks (FLAC, WAV, MP3, AAC/M4A, Ogg/Opus) for all four discs in that folder (expected "Disc 1" … "Disc 4" folders, or "(Disc N)" in the file names).';
+    st.className = 'status err';
+  } else if (new Set(counts).size > 1) {
+    st.textContent = `Discs have different track counts: ${counts.join(', ')}.`;
+    st.className = 'status err';
+  } else {
+    state.tracks = discs[0].map((t, i) => ({
+      num: t.num,
+      title: stripDisc(t.name.replace(/^(?:0?[1-4][-_.])?\d{1,2}\.?\s*[-–]?\s*/, '').replace(AUDIO_EXT, '')),
+      files: discs.map((d) => d[i].file),
+    }));
+    const exts = [...new Set(discs.flat().map((t) => t.ext))].sort((a, b) => formatRank(a) - formatRank(b));
+    const lossy = exts.filter((e) => LOSSY_EXT.has(e));
+    st.textContent = `${root || 'Album'} — 4 discs × ${counts[0]} tracks (${exts.map((e) => e.toUpperCase()).join(' + ')})` +
+      (lossy.length ? '. Lossy source: the output can\'t be better than the input, so FLAC 16-bit output is plenty.' : '');
+    st.className = 'status ok';
+  }
+  const sel = $('tracks');
+  sel.innerHTML = '<option value="all">All tracks</option>' +
+    state.tracks.map((t, i) => `<option value="${i}">${pad2(t.num)} - ${t.title.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`).join('');
+  updateOutputControls();
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(f); rows.push(row); row = []; f = '';
+    } else f += c;
+  }
+  if (f || row.length) { row.push(f); rows.push(row); }
+  return rows.filter((r) => r.some((x) => x.trim()));
+}
+
+function lsInfoFromCsv(text) {
+  // ASH Listening Set BRIRs/Rooms.csv -> { R01: { name, loc, type, dims, reduced, rt60, listener, dist, ... } }
+  const rows = parseCsv(text.replace(/^\uFEFF/, ''));
+  if (!rows.length) return null;
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const col = (re) => head.findIndex((h) => re.test(h));
+  const ix = { id: col(/^room id/), name: col(/^room name/), loc: col(/location/), type: col(/room type/),
+               dims: col(/dimension/), reduced: col(/reduced/), rt60: col(/rt60/), listener: col(/listener/),
+               dist: col(/distance/), azRange: col(/azimuth/), elRange: col(/elevation/) };
+  if (ix.id < 0 || ix.name < 0) return null;
+  const out = {};
+  for (const r of rows.slice(1)) {
+    const id = (r[ix.id] || '').trim().toUpperCase();
+    if (!/^R\d+$/.test(id)) continue;
+    out[id] = {};
+    for (const [k, c] of Object.entries(ix)) if (k !== 'id') out[id][k] = c >= 0 ? (r[c] || '').trim() : '';
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+async function loadBrirs(files) {
+  // ASH Listening Set:  BRIR_<room>_<C1..C6>_E<elevation>_A<azimuth>.wav (plus BRIRs/Rooms.csv)
+  // ASH-IR-Dataset:     BRIR_<room>_P1_E0_A<azimuth>.wav (the R05 folder holds R05A and R05B)
+  // Room IDs mean different rooms in the two datasets, so rooms are keyed "<set>|<room>".
+  const lsPat = /(?:^|\/)BRIR_(R\d{2})_(C\d+)_E(-?\d+)_A(-?\d+)\.wav$/i;
+  const irPat = /(?:^|\/)BRIR_(R\d{2}[A-Z]?)_P1_E0_A(-?\d+)\.wav$/i;
+  const rooms = {};
+  let csv = null;
+  state.brirFiles = {};
+  for (const f of files) {
+    const p = relPath(f);
+    if (/(?:^|\/)Rooms\.csv$/i.test(p)) { csv = f; continue; }
+    let m, set, room, cfg, el, az;
+    if ((m = p.match(lsPat))) [set, room, cfg, el, az] = ['ls', m[1].toUpperCase(), m[2].toUpperCase(), +m[3], +m[4]];
+    else if ((m = p.match(irPat))) [set, room, cfg, el, az] = ['ir', m[1].toUpperCase(), 'P1', 0, +m[2]];
+    else continue;
+    state.brirFiles[`${set}|${room}|${cfg}|${el}|${az}`] = f;
+    const r = (rooms[`${set}|${room}`] ??= { set, room, cfgs: {} });
+    ((r.cfgs[cfg] ??= {})[el] ??= new Set()).add(az);
+  }
+  state.lsInfo = LS_ROOM_INFO;
+  if (csv) {
+    try { state.lsInfo = lsInfoFromCsv(await csv.text()) || LS_ROOM_INFO; } catch { /* keep the built-in table */ }
+  }
+  const order = (k) => (k.startsWith('ls|') ? '0' : '1') + k;
+  state.rooms = {};
+  for (const k of Object.keys(rooms).sort((a, b) => (order(a) < order(b) ? -1 : 1))) {
+    const r = rooms[k];
+    for (const els of Object.values(r.cfgs)) for (const e of Object.keys(els)) els[e] = [...els[e]].sort((a, b) => a - b);
+    state.rooms[k] = r;
+  }
+  irCache.clear();
+  const keys = Object.keys(state.rooms);
+  const sets = [...new Set(keys.map((k) => k.split('|')[0]))];
+  const st = $('brirStatus');
+  if (!keys.length) {
+    st.textContent = 'No ASH BRIR files (BRIR_<room>_…_A<azimuth>.wav) found in that folder.';
+    st.className = 'status err';
+  } else {
+    st.textContent = sets.map((s) => `${DATASETS[s]}: ${keys.filter((k) => k.startsWith(s + '|')).length} rooms`).join(' · ');
+    st.className = 'status ok';
+  }
+  const sel = $('room');
+  const want = $('room').value || (saved.room && !saved.room.includes('|') ? 'ir|' + saved.room : saved.room);
+  sel.innerHTML = sets.map((s) => {
+    const opts = keys.filter((k) => k.startsWith(s + '|')).map((k) => `<option value="${k}">${roomLabel(state.rooms[k])}</option>`).join('');
+    return sets.length > 1 ? `<optgroup label="${DATASETS[s]}">${opts}</optgroup>` : opts;
+  }).join('');
+  const fallback = [want, want === 'ir|R05' ? 'ir|R05A' : '', 'ir|' + DEFAULT_ROOM, 'ls|' + DEFAULT_ROOM].find((k) => k && state.rooms[k]);
+  sel.value = fallback || keys[0] || '';
+  onRoomChange();
+}
+
+function onRoomChange() {
+  // Measurement configurations of the room (ASH Listening Set C1..C6; one "P1" for ASH-IR-Dataset).
+  const r = currentRoom();
+  const cfgs = r ? Object.keys(r.cfgs).sort() : [];
+  const cs = $('config');
+  const prev = cs.value || saved.config;
+  cs.innerHTML = cfgs.map((c) => `<option value="${c}">${configLabel(r, c)}</option>`).join('');
+  cs.value = cfgs.includes(prev) ? prev : (cfgs[0] || '');
+  $('configLabel').hidden = cfgs.length < 2;
+  onConfigChange();
+}
+
+function onConfigChange() {
+  const r = currentRoom(), cfg = $('config').value;
+  $('roomInfo').textContent = describeRoom(r, cfg);
+  const els = r && r.cfgs[cfg] ? Object.keys(r.cfgs[cfg]).map(Number).sort((a, b) => a - b) : [];
+  $('discTable').classList.toggle('noel', els.length < 2);
+  discRows.forEach((row) => {
+    row.el.innerHTML = els.map((e) => `<option value="${e}">${elLabel(e)}</option>`).join('');
+    // Nearest available height, preferring the one closer to ear level on a tie.
+    const w = row.want.el;
+    row.el.value = els.length ? String(els.reduce((b, e) => (Math.abs(e - w) < Math.abs(b - w) ||
+      (Math.abs(e - w) === Math.abs(b - w) && Math.abs(e) < Math.abs(b)) ? e : b))) : '';
+    fillAzimuths(row);
+  });
+  drawLayout();
+}
+
+function fillAzimuths(row) {
+  // Azimuths measured for this room, configuration and the disc's height; snap the chosen angles to them.
+  const r = currentRoom(), cfg = $('config').value;
+  const azs = (r && r.cfgs[cfg] && r.cfgs[cfg][row.el.value]) || [];
+  const opts = azs.map((a) => `<option value="${a}">${a}°</option>`).join('');
+  row.azL.innerHTML = opts; row.azR.innerHTML = opts;
+  row.azL.value = String(nearest(azs, row.want.azL));
+  row.azR.value = row.link.checked ? row.azL.value : String(nearest(azs, row.want.azR));
+}
+$('room').addEventListener('change', onRoomChange);
+$('config').addEventListener('change', onConfigChange);
+
+// ---- speaker layout diagram (top-down; 0° = front/up, positive = right) --------
+function drawLayout() {
+  const C = 140, R = 96;
+  const f = (v) => v.toFixed(1);
+  const pos = (az, r) => { const t = az * Math.PI / 180; return [C + r * Math.sin(t), C - r * Math.cos(t)]; };
+  const pts = [];
+  discRows.forEach((row, i) => {
+    if (row.azL.value === '') return;
+    const l = +row.azL.value, r = +(row.link.checked ? row.azL.value : row.azR.value);
+    const el = +row.el.value || 0;
+    const color = DISC_COLORS[i], h = el ? `, ${elLabel(el)}` : '';
+    if (l === r) pts.push({ az: l, el, label: String(i + 1), color, tip: `Disc ${i + 1}: ${l}°${h}` });
+    else {
+      pts.push({ az: l, el, label: `${i + 1}L`, color, tip: `Disc ${i + 1}, left channel: ${l}°${h}` });
+      pts.push({ az: r, el, label: `${i + 1}R`, color, tip: `Disc ${i + 1}, right channel: ${r}°${h}` });
+    }
+  });
+  let s = `<circle cx="${C}" cy="${C}" r="${R}" class="ring"/>`;
+  for (let a = -150; a <= 180; a += 30) {
+    const [x1, y1] = pos(a, R - 4), [x2, y2] = pos(a, R + 4);
+    s += `<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" class="tick"/>`;
+  }
+  for (const [a, t, anchor, dist] of [[0, 'Front', 'middle', 22], [90, 'Right', 'start', 18], [180, 'Behind', 'middle', 22], [-90, 'Left', 'end', 18]]) {
+    const [x, y] = pos(a, R + dist);
+    s += `<text x="${f(x)}" y="${f(y)}" class="compass" text-anchor="${anchor}" dominant-baseline="middle">${t}</text>`;
+  }
+  // listener's head: nose points to the front, ears at the sides
+  s += `<ellipse cx="${C - 20}" cy="${C}" rx="4" ry="7" class="head"/><ellipse cx="${C + 20}" cy="${C}" rx="4" ry="7" class="head"/>` +
+       `<polygon points="${C - 6},${C - 18} ${C},${C - 28} ${C + 6},${C - 18}" class="head"/>` +
+       `<circle cx="${C}" cy="${C}" r="20" class="head"/>`;
+  if (!pts.length) {
+    s += `<text x="${C}" y="${C + 48}" class="compass" text-anchor="middle">Choose the BRIR folder to see the layout</text>`;
+  }
+  // Sources at the same angle are stacked inwards so they stay visible.
+  const used = {}, rays = [], dots = [];
+  for (const p of pts) {
+    const k = used[p.az] = (used[p.az] ?? -1) + 1;
+    const [x, y] = pos(p.az, R - k * 26), [hx, hy] = pos(p.az, 24);
+    rays.push(`<line x1="${f(hx)}" y1="${f(hy)}" x2="${f(x)}" y2="${f(y)}" stroke="${p.color}" class="ray"/>`);
+    dots.push(`<g><title>${p.tip}</title><circle cx="${f(x)}" cy="${f(y)}" r="12" fill="${p.color}"/>` +
+              `<text x="${f(x)}" y="${f(y)}" class="dotlabel" text-anchor="middle" dominant-baseline="central">${p.label}</text>` +
+              (p.el ? `<text x="${f(x)}" y="${f(y + 20)}" class="elev" text-anchor="middle" dominant-baseline="central">${p.el > 0 ? '▲' : '▼'}${Math.abs(p.el)}°</text>` : '') +
+              `</g>`);
+  }
+  $('layout').innerHTML = s + rays.join('') + dots.join('');
+  $('layoutCaption').textContent = "Seen from above: you're in the middle, facing up. Hover over a dot to see its angle." +
+    (pts.some((p) => p.el) ? ' ▲/▼ = that many degrees above/below ear level.' : '');
+}
+drawLayout();
+$('musicInput').addEventListener('change', (e) => loadMusic([...e.target.files]));
+$('brirInput').addEventListener('change', (e) => loadBrirs([...e.target.files]));
+
+if (window.showDirectoryPicker) {
+  $('outBtn').addEventListener('click', async () => {
+    try {
+      state.outDir = await window.showDirectoryPicker({ id: 'zaireeka-out', mode: 'readwrite' });
+      $('outStatus').textContent = state.outDir.name;
+      $('outStatus').className = 'status ok';
+    } catch (e) {
+      if (e.name !== 'AbortError') log('Could not open output folder: ' + e.message);
+    }
+  });
+} else {
+  $('outBtn').disabled = true;
+  $('outStatus').textContent = 'This browser cannot write into a folder; files go to your Downloads folder.';
+}
+
+// ---- audio input -------------------------------------------------------------
+async function decode(file) {
+  // An OfflineAudioContext at 44.1 kHz decodes and, if needed, resamples to 44.1 kHz.
+  const ctx = new OfflineAudioContext(2, 1, SR);
+  try {
+    return await ctx.decodeAudioData(await file.arrayBuffer());
+  } catch (e) {
+    const ext = (file.name.match(/\.(\w+)$/) || [])[1] || '?';
+    throw new Error(`This browser can't decode ${file.name} (${ext.toUpperCase()}` +
+      (/^m4a$/i.test(ext) ? '; ALAC in .m4a is not supported by most browsers, convert it to FLAC' : '') + ').');
+  }
+}
+
+async function flacInfo(file) {
+  const b = new Uint8Array(await file.slice(0, 42).arrayBuffer());
+  if (b.length < 42 || String.fromCharCode(b[0], b[1], b[2], b[3]) !== 'fLaC' || (b[4] & 0x7f) !== 0) return null;
+  const dv = new DataView(b.buffer);
+  return {
+    sr: (b[18] << 12) | (b[19] << 4) | (b[20] >> 4),
+    frames: (b[21] & 0x0f) * 4294967296 + dv.getUint32(22),
+  };
+}
+
+async function wavInfo(file) {
+  // PCM/float WAV: sample rate and frame count from the fmt and data chunks.
+  const b = new DataView(await file.slice(0, 65536).arrayBuffer());
+  if (b.byteLength < 12 || b.getUint32(0) !== 0x52494646 || b.getUint32(8) !== 0x57415645) return null;
+  let p = 12, sr = 0, align = 0;
+  while (p + 8 <= b.byteLength) {
+    const id = b.getUint32(p), size = b.getUint32(p + 4, true);
+    if (id === 0x666d7420) { sr = b.getUint32(p + 12, true); align = b.getUint16(p + 20, true); }
+    if (id === 0x64617461) {
+      const bytes = size && size !== 0xffffffff ? Math.min(size, file.size - p - 8) : file.size - p - 8;
+      return sr && align ? { sr, frames: Math.floor(bytes / align) } : null;
+    }
+    p += 8 + size + (size & 1);
+  }
+  return null;
+}
+
+const frameCache = new WeakMap();
+async function sourceFrames(file) {
+  // Length in 44.1 kHz frames. FLAC/WAV headers give it directly; other formats (or other rates,
+  // where the browser's resampler decides the exact length) are decoded once and cached.
+  if (frameCache.has(file)) return frameCache.get(file);
+  const info = (await flacInfo(file)) || (await wavInfo(file));
+  const frames = info && info.sr === SR && info.frames ? info.frames : (await decode(file)).length;
+  frameCache.set(file, frames);
+  return frames;
+}
+
+// ---- source tags (FLAC Vorbis comments, MP3 ID3v2, M4A/MP4 iTunes atoms, Ogg comments, WAV INFO) ----
+async function readTags(file) {
+  // Upper-case Vorbis-style keys: TITLE, ARTIST, ALBUMARTIST, ALBUM, DATE, GENRE.
+  try {
+    const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    const sig = String.fromCharCode(...head.subarray(0, 4));
+    if (sig === 'fLaC') return await readFlacTags(file);
+    if (sig.startsWith('ID3')) return await readId3Tags(file);
+    if (String.fromCharCode(...head.subarray(4, 8)) === 'ftyp') return await readMp4Tags(file);
+    if (sig === 'OggS') return readVorbisComment(new Uint8Array(await file.slice(0, 262144).arrayBuffer()));
+    if (sig === 'RIFF') return await readWavInfoTags(file);
+  } catch { /* unreadable tags: fall back to file names */ }
+  return {};
+}
+
+function parseVorbisComment(b, tags = {}) {
+  // Vendor string then key=value list (little-endian lengths), as used in FLAC and Ogg.
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength), dec = new TextDecoder();
+  let p = 4 + dv.getUint32(0, true);
+  const count = dv.getUint32(p, true); p += 4;
+  for (let i = 0; i < count && p + 4 <= b.length; i++) {
+    const l = dv.getUint32(p, true); p += 4;
+    const s = dec.decode(b.subarray(p, p + l)); p += l;
+    const eq = s.indexOf('=');
+    if (eq > 0) { const k = s.slice(0, eq).toUpperCase(); if (!(k in tags)) tags[k] = s.slice(eq + 1); }
+  }
+  return tags;
+}
+
+function readVorbisComment(b) {
+  // Ogg Vorbis ("\x03vorbis") or Opus ("OpusTags") comment header in the first pages.
+  // Good enough for tags that fit in the first page; page boundaries inside the header are skipped.
+  const find = (pat) => { outer: for (let i = 0; i + pat.length <= b.length; i++) {
+    for (let j = 0; j < pat.length; j++) if (b[i + j] !== pat[j]) continue outer; return i; } return -1; };
+  const enc = (s) => [...s].map((c) => c.charCodeAt(0));
+  let i = find(enc('OpusTags')), off = 8;
+  if (i < 0) { i = find([3, ...enc('vorbis')]); off = 7; }
+  return i < 0 ? {} : parseVorbisComment(b.subarray(i + off));
+}
+
+async function readFlacTags(file) {
+  const tags = {};
+  let off = 4;
+  for (let guard = 0; guard < 128; guard++) {
+    const h = new Uint8Array(await file.slice(off, off + 4).arrayBuffer());
+    if (h.length < 4) break;
+    const last = h[0] & 0x80, type = h[0] & 0x7f, len = (h[1] << 16) | (h[2] << 8) | h[3];
+    if (type === 4) return parseVorbisComment(new Uint8Array(await file.slice(off + 4, off + 4 + len).arrayBuffer()), tags);
+    if (last) break;
+    off += 4 + len;
+  }
+  return tags;
+}
+
+async function readId3Tags(file) {
+  // ID3v2.2/2.3/2.4 text frames.
+  const h = new Uint8Array(await file.slice(0, 10).arrayBuffer());
+  const ver = h[3], syncsafe = (a, i) => (a[i] << 21) | (a[i + 1] << 14) | (a[i + 2] << 7) | a[i + 3];
+  const size = syncsafe(h, 6);
+  let b = new Uint8Array(await file.slice(10, 10 + size).arrayBuffer());
+  if (h[5] & 0x80 && ver < 4) {   // whole-tag unsynchronisation (v2.2/2.3): FF 00 -> FF
+    const o = []; for (let i = 0; i < b.length; i++) { o.push(b[i]); if (b[i] === 0xff && b[i + 1] === 0) i++; }
+    b = new Uint8Array(o);
+  }
+  let p = 0;
+  if (h[5] & 0x40 && ver >= 3) p += ver === 4 ? syncsafe(b, 0) : 4 + ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
+  const MAP = { TIT2: 'TITLE', TT2: 'TITLE', TPE1: 'ARTIST', TP1: 'ARTIST', TPE2: 'ALBUMARTIST', TP2: 'ALBUMARTIST',
+                TALB: 'ALBUM', TAL: 'ALBUM', TDRC: 'DATE', TYER: 'DATE', TYE: 'DATE', TCON: 'GENRE', TCO: 'GENRE' };
+  const text = (d) => {
+    const enc = d[0], body = d.subarray(1);
+    const s = enc === 1 || enc === 2 ? new TextDecoder(enc === 2 ? 'utf-16be' : 'utf-16').decode(body)
+            : new TextDecoder(enc === 3 ? 'utf-8' : 'latin1').decode(body);
+    return s.replace(/\0+$/, '').split('\0')[0].trim();
+  };
+  const tags = {};
+  const idLen = ver === 2 ? 3 : 4, hdLen = ver === 2 ? 6 : 10;
+  while (p + hdLen <= b.length && b[p]) {
+    const id = String.fromCharCode(...b.subarray(p, p + idLen));
+    const len = ver === 2 ? (b[p + 3] << 16) | (b[p + 4] << 8) | b[p + 5]
+              : ver === 4 ? syncsafe(b, p + 4) : (b[p + 4] << 24) | (b[p + 5] << 16) | (b[p + 6] << 8) | b[p + 7];
+    if (len <= 0 || p + hdLen + len > b.length) break;
+    const key = MAP[id];
+    if (key && !(key in tags)) {
+      let v = text(b.subarray(p + hdLen, p + hdLen + len));
+      if (key === 'GENRE') v = v.replace(/^\((\d+)\)$/, '$1');
+      if (v) tags[key] = v;
+    }
+    p += hdLen + len;
+  }
+  return tags;
+}
+
+async function readMp4Tags(file) {
+  // iTunes-style metadata: moov > udta > meta > ilst > (©nam, ©ART, aART, ©alb, ©day, ©gen) > data.
+  const MAP = { '\u00a9nam': 'TITLE', '\u00a9ART': 'ARTIST', 'aART': 'ALBUMARTIST', '\u00a9alb': 'ALBUM',
+                '\u00a9day': 'DATE', '\u00a9gen': 'GENRE' };
+  const latin = new TextDecoder('latin1'), utf8 = new TextDecoder();
+  const readBox = async (off) => {
+    const h = new DataView(await file.slice(off, off + 16).arrayBuffer());
+    if (h.byteLength < 8) return null;
+    let size = h.getUint32(0), hd = 8;
+    const type = latin.decode(new Uint8Array(h.buffer, 4, 4));
+    if (size === 1) { size = h.getUint32(8) * 4294967296 + h.getUint32(12); hd = 16; }
+    if (size === 0) size = file.size - off;
+    return size >= hd ? { type, size, hd } : null;
+  };
+  // Find moov at the top level (it may come after the audio data), then parse it in memory.
+  let off = 0, moov = null;
+  for (let guard = 0; guard < 64 && off < file.size; guard++) {
+    const box = await readBox(off);
+    if (!box) break;
+    if (box.type === 'moov') { moov = new Uint8Array(await file.slice(off + box.hd, off + box.size).arrayBuffer()); break; }
+    off += box.size;
+  }
+  const tags = {};
+  if (!moov || moov.length > 64e6) return tags;
+  const walk = (b, path) => {
+    const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    let p = 0;
+    while (p + 8 <= b.length) {
+      const size = dv.getUint32(p), type = latin.decode(b.subarray(p + 4, p + 8));
+      if (size < 8 || p + size > b.length) break;
+      const body = b.subarray(p + 8, p + size);
+      if (path === 'ilst' && MAP[type]) {
+        const d = new DataView(body.buffer, body.byteOffset, body.byteLength);
+        if (body.length > 16 && latin.decode(body.subarray(4, 8)) === 'data' && d.getUint32(8) === 1 && !(MAP[type] in tags)) {
+          tags[MAP[type]] = utf8.decode(body.subarray(16, d.getUint32(0))).trim();
+        }
+      } else if (type === 'udta' || type === 'ilst') walk(body, type);
+      else if (type === 'meta') walk(body.subarray(4), 'meta');   // meta is a full box (4-byte version/flags)
+      p += size;
+    }
+  };
+  walk(moov, 'moov');
+  return tags;
+}
+
+async function readWavInfoTags(file) {
+  // RIFF LIST/INFO chunk (INAM, IART, IPRD, ICRD, IGNR); chunks are walked by size, without reading the audio.
+  const MAP = { INAM: 'TITLE', IART: 'ARTIST', IPRD: 'ALBUM', ICRD: 'DATE', IGNR: 'GENRE' };
+  const latin = new TextDecoder('latin1'), utf8 = new TextDecoder();
+  const tags = {};
+  let off = 12;
+  for (let guard = 0; guard < 64 && off + 8 <= file.size; guard++) {
+    const h = new DataView(await file.slice(off, off + 12).arrayBuffer());
+    const id = latin.decode(new Uint8Array(h.buffer, 0, 4)), size = h.getUint32(4, true);
+    if (id === 'LIST' && h.byteLength >= 12 && latin.decode(new Uint8Array(h.buffer, 8, 4)) === 'INFO' && size < 1e6) {
+      const b = new Uint8Array(await file.slice(off + 12, off + 8 + size).arrayBuffer());
+      const dv = new DataView(b.buffer);
+      for (let p = 0; p + 8 <= b.length;) {
+        const k = latin.decode(b.subarray(p, p + 4)), l = dv.getUint32(p + 4, true);
+        if (MAP[k]) tags[MAP[k]] = utf8.decode(b.subarray(p + 8, p + 8 + l)).replace(/\0+$/, '').trim();
+        p += 8 + l + (l & 1);
+      }
+    }
+    off += 8 + size + (size & 1);
+  }
+  return tags;
+}
+
+async function trackInfo(t) {
+  if (!t.info) {
+    const g = await readTags(t.files[0]);
+    t.info = {
+      title: stripDisc(g.TITLE || t.title), artist: g.ARTIST || ARTIST, albumartist: g.ALBUMARTIST || g.ARTIST || ARTIST,
+      album: stripDisc(g.ALBUM || ALBUM), date: g.DATE || '', genre: g.GENRE || '',
+    };
+  }
+  return t.info;
+}
+
+async function coverPicture() {
+  // Cover image for FLAC PICTURE blocks: { mime, data, width, height } or null.
+  if (state.coverPic !== undefined) return state.coverPic;
+  const f = state.cover;
+  if (!f) return (state.coverPic = null);
+  if (f.size > 16000000) { log(`Cover ${f.name} is too large to embed; skipped.`); return (state.coverPic = null); }
+  let width = 0, height = 0;
+  try { const bm = await createImageBitmap(f); width = bm.width; height = bm.height; bm.close(); } catch { /* keep 0 */ }
+  state.coverPic = { mime: /\.png$/i.test(f.name) ? 'image/png' : 'image/jpeg', data: new Uint8Array(await f.arrayBuffer()), width, height };
+  return state.coverPic;
+}
+
+async function wavRate(file) {
+  const b = new DataView(await file.slice(0, 28).arrayBuffer());
+  return b.byteLength >= 28 && b.getUint32(0) === 0x52494646 && b.getUint32(12) === 0x666d7420
+    ? b.getUint32(24, true) : null;
+}
+
+function emphasizeDirect([l, r], db) {
+  // Scale the direct sound (first arrival + DIRECT_MS, cosine fade) by db, leaving the reverb.
+  // The same window is used for both ears, so interaural cues are preserved. Same maths as render.py.
+  if (db === 0) return [l, r];
+  const n = l.length;
+  let max = 0;
+  for (let i = 0; i < n; i++) max = Math.max(max, Math.abs(l[i]), Math.abs(r[i]));
+  let onset = 0;
+  for (let i = 0; i < n; i++) if (Math.max(Math.abs(l[i]), Math.abs(r[i])) > 0.1 * max) { onset = i; break; }
+  const end = Math.min(onset + Math.round(DIRECT_MS * SR / 1000), n);
+  const fade = Math.round(DIRECT_FADE_MS * SR / 1000);
+  const k = 10 ** (db / 20) - 1;
+  const ol = l.slice(), or = r.slice();
+  for (let i = 0; i < end; i++) { ol[i] += k * l[i]; or[i] += k * r[i]; }
+  for (let j = 0; j < fade && end + j < n; j++) {
+    const w = k * 0.5 * (1 + Math.cos(Math.PI * j / fade));
+    ol[end + j] += w * l[end + j]; or[end + j] += w * r[end + j];
+  }
+  return [ol, or];
+}
+
+async function getBrir(job, az, el, db) {
+  const rawKey = `${job.set}|${job.room}|${job.cfg}|${el}|${az}`, key = `${rawKey}|${db}`;
+  if (irCache.has(key)) return irCache.get(key);
+  let raw = irCache.get(rawKey);
+  if (!raw) {
+    const f = state.brirFiles[rawKey];
+    if (!f) throw new Error(`No BRIR for room ${job.room} ${job.cfg} at azimuth ${az}°, ${elLabel(el)}.`);
+    const rate = await wavRate(f);
+    if (rate && rate !== SR) throw new Error(`${f.name} is ${rate} Hz, expected ${SR}.`);
+    const b = await decode(f);
+    if (b.numberOfChannels !== 2) throw new Error(`${f.name} must be 2-channel (got ${b.numberOfChannels}).`);
+    raw = [b.getChannelData(0).slice(), b.getChannelData(1).slice()];
+    irCache.set(rawKey, raw);
+  }
+  const h = emphasizeDirect(raw, db);
+  irCache.set(key, h);
+  return h;
+}
+
+// ---- rendering ---------------------------------------------------------------
+// Render one track (one file per disc) into a stereo mix. Discs are processed one at a time
+// to keep memory down. A positive delay shifts a disc later, a negative one trims its start.
+async function renderTrack(track, job, limit, report) {
+  const discs = job.discs;
+  const lim = limit || Infinity;
+  const lengths = [];
+  for (let i = 0; i < 4; i++) lengths.push(Math.min(await sourceFrames(track.files[i]), lim));
+  const delays = discs.map((d) => Math.round(d.delayMs * SR / 1000));
+  const irs = [];
+  for (const d of discs) irs.push([await getBrir(job, d.azL, d.el, d.direct), await getBrir(job, d.azR, d.el, d.direct)]);
+  const irLen = Math.max(...irs.flat().map((h) => h[0].length));
+  const starts = delays.map((d) => Math.max(d, 0));
+  const contentEnd = Math.max(...lengths.map((L, i) => starts[i] + L - Math.max(-delays[i], 0)));
+  const n = Math.max(contentEnd + irLen - 1, 1);
+  const outL = new Float32Array(n), outR = new Float32Array(n);
+
+  for (let i = 0; i < 4; i++) {
+    checkCancel();
+    report(i, 0);
+    const buf = await decode(track.files[i]);
+    const trim = Math.max(-delays[i], 0);
+    const len = Math.min(buf.length, lim) - trim;
+    if (len <= 0) { log(`  warning: delay ${discs[i].delayMs} ms removes all of disc ${i + 1}`); continue; }
+    const ctxLen = len + irLen - 1;
+    const ctx = new OfflineAudioContext(2, ctxLen, SR);
+    let srcBuf = buf;
+    if (trim > 0 || len !== buf.length || buf.numberOfChannels !== 2) {
+      srcBuf = ctx.createBuffer(2, len, SR);
+      const c0 = buf.getChannelData(0), c1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : c0;
+      srcBuf.copyToChannel(c0.subarray(trim, trim + len), 0);
+      srcBuf.copyToChannel(c1.subarray(trim, trim + len), 1);
+    }
+    // Each source channel feeds its own stereo (left ear, right ear) BRIR at full level.
+    const src = ctx.createBufferSource();
+    src.buffer = srcBuf;
+    const split = ctx.createChannelSplitter(2);
+    src.connect(split);
+    irs[i].forEach(([hl, hr], ch) => {
+      const conv = ctx.createConvolver();
+      conv.normalize = false;                    // keep the BRIR's real level, as render.py does
+      const ib = ctx.createBuffer(2, hl.length, SR);
+      ib.copyToChannel(hl, 0);
+      ib.copyToChannel(hr, 1);
+      conv.buffer = ib;
+      split.connect(conv, ch);                   // mono in + stereo IR -> stereo (both ears) out
+      conv.connect(ctx.destination);
+    });
+    src.start(0);
+    const steps = 20;
+    for (let k = 1; k < steps; k++) {
+      const frame = Math.floor(ctxLen * k / steps / 128) * 128;
+      if (frame > 0) ctx.suspend(frame / SR).then(() => { report(i, k / steps); ctx.resume(); }).catch(() => {});
+    }
+    const out = await ctx.startRendering();
+    const s = starts[i], m = Math.min(out.length, n - s);
+    const a = out.getChannelData(0), b = out.getChannelData(1);
+    for (let j = 0; j < m; j++) { outL[s + j] += a[j]; outR[s + j] += b[j]; }
+  }
+
+  // Drop the inaudible end of the reverb tail, never the music itself.
+  let end = contentEnd;
+  for (let j = n - 1; j >= contentEnd; j--) {
+    if (Math.abs(outL[j]) > 1e-5 || Math.abs(outR[j]) > 1e-5) { end = j + 1; break; }
+  }
+  let peak = 0;
+  for (let j = 0; j < end; j++) {
+    const v = Math.max(Math.abs(outL[j]), Math.abs(outR[j]));
+    if (v > peak) peak = v;
+  }
+  return { L: outL.subarray(0, end), R: outR.subarray(0, end), length: end, peak };
+}
+
+// ---- album peak cache (browser localStorage) ---------------------------------
+// A full render records the album's pre-normalisation peak for its exact settings, so test and
+// single-track renders with the same settings come out at the level they have in the full album.
+function hashString(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16);
+}
+function peakKey(job) {
+  return 'zaireeka-peak:' + hashString(JSON.stringify([
+    PEAK_CACHE_VERSION, job.set, job.room, job.cfg,
+    job.discs.map((d) => [d.azL, d.azR, d.el, d.direct, Math.round(d.delayMs * SR / 1000)]),
+    state.tracks.map((t) => t.files.map((f) => [f.name, f.size])),
+  ]));
+}
+function loadPeak(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } }
+function savePeak(key, peak, settings) {
+  const d = new Date();
+  const when = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  try { localStorage.setItem(key, JSON.stringify({ peak, settings, saved: when })); } catch { /* ignore */ }
+}
+
+async function resolveAlbumPeak(job, rendered) {
+  const key = peakKey(job);
+  const runPeak = Math.max(...rendered.map((r) => r.peak));
+  const complete = !job.test && job.selected.length === state.tracks.length;
+  if (complete) {
+    savePeak(key, runPeak, job.settings);
+    log(`Album peak ${runPeak.toFixed(3)} stored for these settings; test and single-track renders will now match this level.`);
+    return runPeak;
+  }
+  let cached = loadPeak(key);
+  if (!cached && job.measure) {
+    log('Measuring the full album level for these settings (renders without writing)...');
+    const peaks = new Map();
+    if (!job.test) rendered.forEach((r) => peaks.set(r.track, r.peak));
+    for (const [k, t] of state.tracks.entries()) {
+      if (peaks.has(t)) continue;
+      log(`  measuring track ${pad2(t.num)}`);
+      const r = await renderTrack(t, job, null, (disc, frac) =>
+        setProgress((k + (disc + frac) / 4) / state.tracks.length, `Measuring track ${k + 1}/${state.tracks.length} · disc ${disc + 1}/4`));
+      peaks.set(t, r.peak);
+    }
+    savePeak(key, Math.max(...peaks.values()), job.settings);
+    cached = loadPeak(key);
+  }
+  if (!cached) {
+    log('Warning: no full-album level stored for these settings, so this partial render is normalised on its own ' +
+        'peak and will be louder than the same audio in a full render. Do one full render (or tick "Match ' +
+        'full-album level") to fix that.');
+    return runPeak;
+  }
+  log(`Using stored album level (peak ${cached.peak.toFixed(3)}, from ${cached.saved}).`);
+  if (runPeak > cached.peak) {
+    log(`  (this render peaks slightly higher, ${runPeak.toFixed(3)}; using that to avoid clipping)`);
+    return runPeak;
+  }
+  return cached.peak;
+}
+
+// ---- sample conversion -------------------------------------------------------
+let rngState = 1;
+function rnd() {   // xorshift32, uniform in [0, 1)
+  rngState ^= rngState << 13; rngState ^= rngState >>> 17; rngState ^= rngState << 5;
+  return (rngState >>> 0) / 4294967296;
+}
+
+function quantize(L, R, a, b, gain, bits, li, ri) {
+  // Float -> integer PCM. 16-bit gets TPDF dither (±1 LSB); 24-bit is rounded like render.py.
+  const full = 2 ** (bits - 1), hi = full - 1, lo = -full, k = gain * hi;
+  const dither = bits < 24;
+  for (let i = a, j = 0; i < b; i++, j++) {
+    let x = L[i] * k, y = R[i] * k;
+    if (dither) { x += rnd() - rnd(); y += rnd() - rnd(); }
+    let s = Math.round(x); li[j] = s > hi ? hi : s < lo ? lo : s;
+    s = Math.round(y); ri[j] = s > hi ? hi : s < lo ? lo : s;
+  }
+}
+
+function pcmBytes(li, ri, m, bits) {
+  // Interleaved little-endian 16- or 24-bit PCM.
+  const bps = bits / 8, out = new Uint8Array(m * 2 * bps);
+  let o = 0;
+  for (let i = 0; i < m; i++) {
+    let s = li[i];
+    out[o++] = s & 255; out[o++] = (s >> 8) & 255; if (bps === 3) out[o++] = (s >> 16) & 255;
+    s = ri[i];
+    out[o++] = s & 255; out[o++] = (s >> 8) & 255; if (bps === 3) out[o++] = (s >> 16) & 255;
+  }
+  return out;
+}
+
+function floatBytes(L, R, a, b, gain) {
+  const f = new Float32Array((b - a) * 2);
+  for (let i = a, o = 0; i < b; i++) { f[o++] = L[i] * gain; f[o++] = R[i] * gain; }
+  return new Uint8Array(f.buffer);
+}
+
+// ---- WAV ---------------------------------------------------------------------
+function writeStr(u8, off, s) { for (let i = 0; i < s.length; i++) u8[off + i] = s.charCodeAt(i); }
+
+function wavHeader(frames, fmt, info) {
+  // Stereo PCM / IEEE-float WAV header with a LIST/INFO tag chunk.
+  const enc = new TextEncoder();
+  const subs = [];
+  for (const [id, text] of Object.entries(info)) {
+    if (!text) continue;
+    const t = enc.encode(text);
+    const size = t.length + 1;                        // NUL-terminated
+    const c = new Uint8Array(8 + size + (size & 1));  // padded to even length
+    writeStr(c, 0, id);
+    new DataView(c.buffer).setUint32(4, size, true);
+    c.set(t, 8);
+    subs.push(c);
+  }
+  const block = 2 * fmt.bits / 8;
+  const fmtSize = fmt.float ? 18 : 16, factSize = fmt.float ? 12 : 0;
+  const listBody = 4 + subs.reduce((a, c) => a + c.length, 0);
+  const dataBytes = frames * block;
+  const h = new Uint8Array(12 + 8 + fmtSize + factSize + 8 + listBody + 8);
+  if (h.length + dataBytes > 0xffffffff) throw new Error('This is too long for a WAV file (over 4 GB). Choose FLAC or separate track files.');
+  const dv = new DataView(h.buffer);
+  writeStr(h, 0, 'RIFF'); dv.setUint32(4, h.length - 8 + dataBytes, true); writeStr(h, 8, 'WAVE');
+  writeStr(h, 12, 'fmt '); dv.setUint32(16, fmtSize, true);
+  dv.setUint16(20, fmt.float ? 3 : 1, true);   // 1 = PCM, 3 = IEEE float
+  dv.setUint16(22, 2, true);                    // channels
+  dv.setUint32(24, SR, true);                   // sample rate
+  dv.setUint32(28, SR * block, true);           // byte rate
+  dv.setUint16(32, block, true);                // block align
+  dv.setUint16(34, fmt.bits, true);             // bits per sample
+  let o = 36;
+  if (fmt.float) {
+    dv.setUint16(36, 0, true); o = 38;          // cbSize
+    writeStr(h, o, 'fact'); dv.setUint32(o + 4, 4, true); dv.setUint32(o + 8, frames, true); o += 12;
+  }
+  writeStr(h, o, 'LIST'); dv.setUint32(o + 4, listBody, true); writeStr(h, o + 8, 'INFO'); o += 12;
+  for (const c of subs) { h.set(c, o); o += c.length; }
+  writeStr(h, o, 'data'); dv.setUint32(o + 4, dataBytes, true);
+  return h;
+}
+
+// ---- FLAC encoder --------------------------------------------------------------
+// Fixed-blocksize (4096) encoder: per channel the best of CONSTANT, FIXED order 0-4 with
+// partitioned Rice residuals, or VERBATIM; per frame the cheapest of independent / left-side /
+// right-side / mid-side stereo. Lossless; MD5 is left unset (allowed by the format).
+const CRC8 = new Uint8Array(256), CRC16 = new Uint16Array(256);
+for (let i = 0; i < 256; i++) {
+  let c = i;
+  for (let j = 0; j < 8; j++) c = c & 0x80 ? ((c << 1) ^ 0x07) & 0xff : (c << 1) & 0xff;
+  CRC8[i] = c;
+  let d = i << 8;
+  for (let j = 0; j < 8; j++) d = d & 0x8000 ? ((d << 1) ^ 0x8005) & 0xffff : (d << 1) & 0xffff;
+  CRC16[i] = d;
+}
+function crc8(b, a, e) { let c = 0; for (let i = a; i < e; i++) c = CRC8[c ^ b[i]]; return c; }
+function crc16(b, a, e) { let c = 0; for (let i = a; i < e; i++) c = ((c << 8) & 0xffff) ^ CRC16[(c >> 8) ^ b[i]]; return c; }
+
+class BitWriter {
+  constructor(n) { this.buf = new Uint8Array(n); this.pos = 0; this.acc = 0; this.n = 0; }
+  reset() { this.pos = 0; this.acc = 0; this.n = 0; }
+  write(v, bits) {               // 0 <= v < 2^bits, bits <= 24
+    if (this.pos + 8 > this.buf.length) { const b = new Uint8Array(this.buf.length * 2); b.set(this.buf); this.buf = b; }
+    this.acc = (this.acc << bits) | v;
+    this.n += bits;
+    while (this.n >= 8) { this.n -= 8; this.buf[this.pos++] = (this.acc >>> this.n) & 255; }
+    this.acc &= (1 << this.n) - 1;
+  }
+  writeLong(v, bits) { if (bits > 24) { this.write(v >>> 16, bits - 16); this.write(v & 0xffff, 16); } else this.write(v, bits); }
+  writeSigned(v, bits) { this.writeLong(v & ((1 << bits) - 1), bits); }
+  rice(u, k) {                   // unsigned u: q zeros, a one, then the k low bits
+    const q = u >>> k;
+    if (q + 1 + k <= 24) { this.write((1 << k) | (u & ((1 << k) - 1)), q + 1 + k); return; }
+    let z = q;
+    while (z >= 24) { this.write(0, 24); z -= 24; }
+    this.write(1, z + 1);
+    this.writeLong(u & ((1 << k) - 1), k);
+  }
+  align() { if (this.n) this.write(0, 8 - this.n); }
+}
+
+function utf8Num(v) {
+  if (v < 0x80) return [v];
+  const n = v < 0x800 ? 2 : v < 0x10000 ? 3 : v < 0x200000 ? 4 : v < 0x4000000 ? 5 : 6;
+  const out = [((0xff00 >> n) & 0xff) | (v >>> (6 * (n - 1)))];
+  for (let i = n - 2; i >= 0; i--) out.push(0x80 | ((v >>> (6 * i)) & 0x3f));
+  return out;
+}
+
+function concatBytes(chunks) {
+  if (chunks.length === 1) return chunks[0];
+  const out = new Uint8Array(chunks.reduce((a, c) => a + c.length, 0));
+  let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out;
+}
+
+class FlacEncoder {
+  constructor(bits, totalFrames) {
+    this.bits = bits; this.total = totalFrames; this.BS = 4096;
+    this.pL = new Int32Array(this.BS); this.pR = new Int32Array(this.BS); this.np = 0;
+    this.S = new Int32Array(this.BS); this.M = new Int32Array(this.BS);
+    this.uu = [0, 1, 2, 3].map(() => new Uint32Array(this.BS));
+    this.bw = new BitWriter(this.BS * 16);
+    this.frameNo = 0;
+  }
+
+  header(comments, picture) {
+    const blocks = [];
+    const si = new Uint8Array(34), dv = new DataView(si.buffer);
+    const bs = this.total < this.BS ? Math.max(16, this.total) : this.BS;
+    dv.setUint16(0, bs); dv.setUint16(2, bs);   // min/max block size; frame sizes and MD5 left 0 (unknown)
+    dv.setBigUint64(10, (BigInt(SR) << 44n) | (1n << 41n) | (BigInt(this.bits - 1) << 36n) | BigInt(this.total));
+    blocks.push([0, si]);
+    const enc = new TextEncoder();
+    const vendor = enc.encode(VENDOR);
+    const entries = Object.entries(comments).filter(([, v]) => v !== '' && v != null).map(([k, v]) => enc.encode(`${k}=${v}`));
+    const vc = new Uint8Array(8 + vendor.length + entries.reduce((a, e) => a + 4 + e.length, 0));
+    const vdv = new DataView(vc.buffer);
+    let o = 0;
+    vdv.setUint32(o, vendor.length, true); o += 4; vc.set(vendor, o); o += vendor.length;
+    vdv.setUint32(o, entries.length, true); o += 4;
+    for (const e of entries) { vdv.setUint32(o, e.length, true); o += 4; vc.set(e, o); o += e.length; }
+    blocks.push([4, vc]);
+    if (picture) {
+      const mime = enc.encode(picture.mime);
+      const pb = new Uint8Array(32 + mime.length + picture.data.length), pdv = new DataView(pb.buffer);
+      let p = 0;
+      pdv.setUint32(p, 3); p += 4;                                   // front cover
+      pdv.setUint32(p, mime.length); p += 4; pb.set(mime, p); p += mime.length;
+      pdv.setUint32(p, 0); p += 4;                                   // empty description
+      pdv.setUint32(p, picture.width); p += 4; pdv.setUint32(p, picture.height); p += 4;
+      pdv.setUint32(p, 24); p += 4; pdv.setUint32(p, 0); p += 4;     // colour depth, palette size
+      pdv.setUint32(p, picture.data.length); p += 4; pb.set(picture.data, p);
+      blocks.push([6, pb]);
+    }
+    const parts = [new Uint8Array([0x66, 0x4c, 0x61, 0x43])];       // "fLaC"
+    blocks.forEach(([type, body], i) => {
+      const len = body.length;
+      parts.push(new Uint8Array([(i === blocks.length - 1 ? 0x80 : 0) | type, len >> 16, (len >> 8) & 255, len & 255]), body);
+    });
+    return concatBytes(parts);
+  }
+
+  push(li, ri, n) {
+    const out = [];
+    let o = 0;
+    while (o < n) {
+      const take = Math.min(this.BS - this.np, n - o);
+      this.pL.set(li.subarray(o, o + take), this.np);
+      this.pR.set(ri.subarray(o, o + take), this.np);
+      this.np += take; o += take;
+      if (this.np === this.BS) { out.push(this.encodeFrame(this.pL, this.pR, this.BS)); this.np = 0; }
+    }
+    return out.length ? concatBytes(out) : new Uint8Array(0);
+  }
+
+  finish() {
+    const r = this.np ? this.encodeFrame(this.pL, this.pR, this.np) : new Uint8Array(0);
+    this.np = 0;
+    return r;
+  }
+
+  plan(x, n, bps, slot) {
+    const x0 = x[0];
+    let same = true;
+    for (let i = 1; i < n; i++) if (x[i] !== x0) { same = false; break; }
+    if (same) return { type: 0, bits: 8 + bps };
+    // Pick the fixed-predictor order with the smallest total |residual|.
+    let order = 0;
+    if (n > 8) {
+      let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0;
+      for (let i = 4; i < n; i++) {
+        const a = x[i], b = x[i - 1], c = x[i - 2], d = x[i - 3], e = x[i - 4];
+        s0 += Math.abs(a); s1 += Math.abs(a - b); s2 += Math.abs(a - 2 * b + c);
+        s3 += Math.abs(a - 3 * b + 3 * c - d); s4 += Math.abs(a - 4 * b + 6 * c - 4 * d + e);
+      }
+      const s = [s0, s1, s2, s3, s4];
+      for (let k = 1; k < 5; k++) if (s[k] < s[order]) order = k;
+    }
+    // Zig-zag residuals.
+    const u = this.uu[slot];
+    for (let i = order; i < n; i++) {
+      let e;
+      switch (order) {
+        case 0: e = x[i]; break;
+        case 1: e = x[i] - x[i - 1]; break;
+        case 2: e = x[i] - 2 * x[i - 1] + x[i - 2]; break;
+        case 3: e = x[i] - 3 * x[i - 1] + 3 * x[i - 2] - x[i - 3]; break;
+        default: e = x[i] - 4 * x[i - 1] + 6 * x[i - 2] - 4 * x[i - 3] + x[i - 4];
+      }
+      u[i] = e >= 0 ? 2 * e : -2 * e - 1;
+    }
+    // Partitioned Rice: estimate cost for partition orders maxP..0, keep the cheapest.
+    let maxP = 0;
+    while (maxP < 8 && n % (2 << maxP) === 0 && (n >> (maxP + 1)) > order) maxP++;
+    let parts = 1 << maxP;
+    const psize = n >> maxP;
+    let sums = new Float64Array(parts), cnts = new Float64Array(parts);
+    for (let q = 0, i = order; q < parts; q++) {
+      let s = 0;
+      const end = (q + 1) * psize;
+      for (; i < end; i++) s += u[i];
+      sums[q] = s; cnts[q] = end - (q === 0 ? order : q * psize);
+    }
+    let best = null;
+    for (let p = maxP; p >= 0; p--) {
+      const ks = new Uint8Array(parts);
+      let cost = 0, maxK = 0;
+      for (let q = 0; q < parts; q++) {
+        const cnt = cnts[q], sum = sums[q];
+        let k = 0, c = cnt + sum;                 // k = 0: one bit per sample plus the unary part
+        if (cnt > 0 && sum > 0) {
+          const mean = sum / cnt;
+          const k0 = mean >= 2 ? Math.min(30, Math.floor(Math.log2(mean))) : 0;
+          for (let kk = Math.max(0, k0 - 1); kk <= Math.min(30, k0 + 1); kk++) {
+            const cc = cnt * (kk + 1) + Math.floor(sum / 2 ** kk);
+            if (cc < c) { c = cc; k = kk; }
+          }
+        }
+        ks[q] = k; cost += c; if (k > maxK) maxK = k;
+      }
+      const method = maxK > 14 ? 1 : 0;
+      cost += 6 + parts * (method ? 5 : 4);
+      if (!best || cost < best.cost) best = { p, ks, method, cost };
+      if (p > 0) {                                // merge neighbouring partitions
+        const ns = new Float64Array(parts / 2), nc = new Float64Array(parts / 2);
+        for (let q = 0; q < parts / 2; q++) { ns[q] = sums[2 * q] + sums[2 * q + 1]; nc[q] = cnts[2 * q] + cnts[2 * q + 1]; }
+        sums = ns; cnts = nc; parts /= 2;
+      }
+    }
+    const fixedBits = 8 + order * bps + best.cost, verbatimBits = 8 + n * bps;
+    if (fixedBits >= verbatimBits) return { type: 1, bits: verbatimBits };
+    return { type: 2, order, p: best.p, ks: best.ks, method: best.method, bits: fixedBits, slot };
+  }
+
+  subframe(x, n, bps, pl) {
+    const bw = this.bw;
+    if (pl.type === 0) { bw.write(0, 8); bw.writeSigned(x[0], bps); return; }
+    if (pl.type === 1) { bw.write(2, 8); for (let i = 0; i < n; i++) bw.writeSigned(x[i], bps); return; }
+    bw.write((8 + pl.order) << 1, 8);             // 0 pad bit, FIXED type, no wasted bits
+    for (let i = 0; i < pl.order; i++) bw.writeSigned(x[i], bps);
+    bw.write(pl.method, 2); bw.write(pl.p, 4);
+    const u = this.uu[pl.slot], parts = 1 << pl.p, psize = n >> pl.p, pb = pl.method ? 5 : 4;
+    let i = pl.order;
+    for (let q = 0; q < parts; q++) {
+      const k = pl.ks[q];
+      bw.write(k, pb);
+      const end = (q + 1) * psize;
+      for (; i < end; i++) bw.rice(u[i], k);
+    }
+  }
+
+  encodeFrame(L, R, n) {
+    const S = this.S, M = this.M, bps = this.bits;
+    for (let i = 0; i < n; i++) { const a = L[i], b = R[i]; S[i] = a - b; M[i] = (a + b) >> 1; }
+    const pL = this.plan(L, n, bps, 0), pR = this.plan(R, n, bps, 1);
+    const pS = this.plan(S, n, bps + 1, 2), pM = this.plan(M, n, bps, 3);
+    const opts = [[1, pL.bits + pR.bits], [8, pL.bits + pS.bits], [9, pS.bits + pR.bits], [10, pM.bits + pS.bits]];
+    let mode = opts[0];
+    for (const o of opts) if (o[1] < mode[1]) mode = o;
+    const bw = this.bw;
+    bw.reset();
+    const bsCode = n === this.BS ? 12 : 7;        // 12 = 4096 samples; 7 = 16-bit size follows
+    bw.write(0x3ffe, 14); bw.write(0, 2);         // sync, reserved, fixed blocksize
+    bw.write(bsCode, 4); bw.write(9, 4);          // 9 = 44.1 kHz
+    bw.write(mode[0], 4); bw.write(bps === 16 ? 4 : 6, 3); bw.write(0, 1);
+    for (const byte of utf8Num(this.frameNo)) bw.write(byte, 8);
+    if (bsCode === 7) bw.write(n - 1, 16);
+    bw.write(crc8(bw.buf, 0, bw.pos), 8);
+    switch (mode[0]) {
+      case 1: this.subframe(L, n, bps, pL); this.subframe(R, n, bps, pR); break;
+      case 8: this.subframe(L, n, bps, pL); this.subframe(S, n, bps + 1, pS); break;
+      case 9: this.subframe(S, n, bps + 1, pS); this.subframe(R, n, bps, pR); break;
+      default: this.subframe(M, n, bps, pM); this.subframe(S, n, bps + 1, pS);
+    }
+    bw.align();
+    const c = crc16(bw.buf, 0, bw.pos);
+    bw.write(c >> 8, 8); bw.write(c & 255, 8);
+    this.frameNo++;
+    return bw.buf.slice(0, bw.pos);
+  }
+}
+
+// ---- output files ------------------------------------------------------------
+async function openOutput(name, mime) {
+  if (window.__testSink) return window.__testSink(name);
+  if (state.outDir) {
+    const fh = await state.outDir.getFileHandle(name, { create: true });
+    const w = await fh.createWritable();
+    return { write: (c) => w.write(c), close: () => w.close(), abort: () => w.abort() };
+  }
+  const parts = [];
+  return {
+    write: async (c) => { parts.push(new Blob([c])); },
+    close: async () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob(parts, { type: mime }));
+      a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 120000);
+    },
+  };
+}
+
+const vorbisTags = (t) => ({
+  TITLE: t.title, ARTIST: t.artist, ALBUMARTIST: t.albumartist, ALBUM: t.album,
+  TRACKNUMBER: t.tracknumber, TRACKTOTAL: t.tracktotal, DATE: t.date, GENRE: t.genre, COMMENT: t.comment,
+});
+const riffTags = (t) => ({
+  INAM: t.title, IART: t.artist, IPRD: t.album, ITRK: t.tracknumber, ICRD: t.date, IGNR: t.genre, ICMT: t.comment,
+});
+
+async function writeAudioFile(name, fmt, parts, tags, picture, progress) {
+  // parts: [{ r: rendered track, gain }] written back to back into one file.
+  const frames = parts.reduce((a, p) => a + p.r.length, 0);
+  const enc = fmt.flac ? new FlacEncoder(fmt.bits, frames) : null;
+  const head = enc ? enc.header(vorbisTags(tags), picture) : wavHeader(frames, fmt, riffTags(tags));
+  const out = await openOutput(name, fmt.flac ? 'audio/flac' : 'audio/wav');
+  rngState = 0x2545f491;                          // reproducible dither
+  try {
+    await out.write(head);
+    const CH = 1 << 16, li = new Int32Array(CH), ri = new Int32Array(CH);
+    let done = 0, lastYield = performance.now();
+    for (const p of parts) {
+      const ab = await p.r.blob.arrayBuffer(), n = p.r.length;
+      const L = new Float32Array(ab, 0, n), R = new Float32Array(ab, n * 4, n);
+      for (let s = 0; s < n; s += CH) {
+        checkCancel();
+        const e = Math.min(n, s + CH), m = e - s;
+        let bytes;
+        if (fmt.float) bytes = floatBytes(L, R, s, e, p.gain);
+        else {
+          quantize(L, R, s, e, p.gain, fmt.bits, li, ri);
+          bytes = enc ? enc.push(li, ri, m) : pcmBytes(li, ri, m, fmt.bits);
+        }
+        if (bytes.length) await out.write(bytes);
+        done += m;
+        if (performance.now() - lastYield > 100) { progress(done / frames); await yieldUI(); lastYield = performance.now(); }
+      }
+    }
+    if (enc) await out.write(enc.finish());
+    await out.close();
+  } catch (e) {
+    if (out.abort) { try { await out.abort(); } catch { /* ignore */ } }
+    throw e;
+  }
+}
+
+function cueSheet(audioName, entries, album, comment) {
+  // entries: [{ title, frames }]; CD frames are 1/75 s = 588 samples.
+  const q = (s) => `"${String(s).replace(/"/g, "'")}"`;
+  const lines = [`REM COMMENT ${q(comment)}`];
+  if (album.genre) lines.push(`REM GENRE ${q(album.genre)}`);
+  if (album.date) lines.push(`REM DATE ${album.date}`);
+  lines.push(`PERFORMER ${q(album.albumartist)}`, `TITLE ${q(album.album + ' (binaural mix)')}`, `FILE ${q(audioName)} WAVE`);
+  let start = 0;
+  entries.forEach((e, i) => {
+    const f = Math.round(start / 588);
+    lines.push(`  TRACK ${pad2(i + 1)} AUDIO`, `    TITLE ${q(e.title)}`, `    PERFORMER ${q(album.artist)}`,
+               `    INDEX 01 ${pad2(Math.floor(f / 4500))}:${pad2(Math.floor(f / 75) % 60)}:${pad2(f % 75)}`);
+    start += e.frames;
+  });
+  return new TextEncoder().encode(lines.join('\r\n') + '\r\n');
+}
+
+// ---- job ---------------------------------------------------------------------
+function buildJob() {
+  if (!state.tracks.length) throw new Error('Choose the music folder first (the one containing Disc 1 … Disc 4).');
+  const roomObj = currentRoom();
+  if (!roomObj) throw new Error('Choose the BRIR folder first.');
+  const { set, room } = roomObj, cfg = $('config').value;
+  const num = (el, name, lo, hi) => {
+    const v = Number(el.value);
+    if (el.value.trim() === '' || !Number.isFinite(v) || v < lo || v > hi) throw new Error(`${name} must be a number from ${lo} to ${hi}.`);
+    return v;
+  };
+  const discs = discRows.map((r, i) => {
+    if (r.azL.value === '' || (!r.link.checked && r.azR.value === '')) throw new Error(`Disc ${i + 1}: choose an azimuth.`);
+    return {
+      azL: +r.azL.value, azR: +(r.link.checked ? r.azL.value : r.azR.value), el: +r.el.value || 0,
+      delayMs: num(r.delay, `Disc ${i + 1}: delay (ms)`, -600000, 600000),
+      direct: num(r.direct, `Disc ${i + 1}: direct (dB)`, -24, 24),
+    };
+  });
+  const fullAlbum = $('modeAlbum').checked;
+  const test = $('test').checked;
+  const fmt = FORMATS[$('format').value];
+  const ceiling = num($('ceiling'), 'Peak level (dBFS)', -20, 0);
+  const testSeconds = test ? num($('testSeconds'), 'Test length (s)', 1, 600) : 0;
+  const prefix = safeFilename($('prefix').value);
+  if (!prefix) throw new Error('Enter a file name prefix.');
+  const sel = $('tracks').value;
+  const selected = sel === 'all' ? state.tracks.map((_, i) => i) : [+sel];
+  const azDesc = discs.map((d, i) => (d.azL === d.azR ? `D${i + 1}=${d.azL}` : `D${i + 1}=${d.azL}/${d.azR}`)).join(' ');
+  const desc = (v) => (new Set(v).size === 1 ? String(v[0]) : v.join(','));
+  const roomDesc = set === 'ir' ? room : `${room}/${cfg} (${DATASETS[set]})`;
+  const elDesc = discs.some((d) => d.el) ? ` elevation[${discs.map((d, i) => `D${i + 1}=${d.el}`).join(' ')}]` : '';
+  const settings = `room=${roomDesc} azimuths[${azDesc}]${elDesc} direct_db=${desc(discs.map((d) => d.direct))} ` +
+                   `delay_ms=${discs.map((d) => d.delayMs).join(',')}`;
+  return {
+    set, room, cfg, discs, fullAlbum, test, testSeconds, selected, settings, fmt, ceiling,
+    peakTarget: 10 ** (ceiling / 20),
+    normalize: fullAlbum ? 'album' : $('normalize').value,
+    measure: $('measure').checked,
+    cover: fmt.flac && $('cover').checked && !!state.cover,
+    cue: fullAlbum && $('cue').checked,
+    prefix: prefix + (test ? '_test' : ''),
+  };
+}
+
+async function runJob(job) {
+  log(`Settings: ${job.settings}`);
+  log(`Output: ${job.fmt.label}, peak ${job.ceiling} dBFS, ${job.fullAlbum ? 'single album file' : 'separate track files'}` +
+      (job.test ? `, test (first ${job.testSeconds} s)` : ''));
+  const limit = job.test ? Math.round(job.testSeconds * SR) : null;
+  const total = job.selected.length;
+
+  // Pass 1: render each track, keep it as a float blob and record its peak, so album
+  // normalisation can use one gain without holding every track in memory.
+  const rendered = [];
+  for (const [k, ti] of job.selected.entries()) {
+    const t = state.tracks[ti];
+    log(`[${k + 1}/${total}] Rendering ${pad2(t.num)} - ${t.title}`);
+    const t0 = performance.now();
+    const r = await renderTrack(t, job, limit, (disc, frac) =>
+      setProgress((k + (disc + frac) / 4) / total, `Track ${k + 1}/${total} · disc ${disc + 1}/4`));
+    rendered.push({ track: t, blob: new Blob([r.L, r.R]), length: r.length, peak: r.peak });
+    log(`  ${(r.length / SR).toFixed(1)} s, peak ${r.peak.toFixed(3)} (rendered in ${fmtTime((performance.now() - t0) / 1000)})`);
+  }
+  checkCancel();
+
+  let albumPeak = Math.max(...rendered.map((r) => r.peak));
+  if (job.normalize === 'album') albumPeak = await resolveAlbumPeak(job, rendered);
+  const gain = (r) => job.peakTarget / ((job.normalize === 'album' ? albumPeak : r.peak) || 1);
+
+  // Pass 2: scale, convert and write.
+  const picture = job.cover ? await coverPicture() : null;
+  const album = await trackInfo(state.tracks[0]);
+  const comment = `Binaural mix: ${job.settings}`;
+  const base = { artist: album.artist, albumartist: album.albumartist, album: album.album, date: album.date, genre: album.genre, comment };
+  if (job.fullAlbum) {
+    const name = `${job.prefix}.${job.fmt.ext}`;
+    const t0 = performance.now();
+    await writeAudioFile(name, job.fmt, rendered.map((r) => ({ r, gain: gain(r) })),
+      { ...base, title: `${album.album} (binaural mix)` }, picture,
+      (f) => setProgress(f, `Writing ${name} · ${Math.round(f * 100)}%`));
+    const frames = rendered.reduce((a, r) => a + r.length, 0);
+    log(`Wrote ${name} (${(frames / SR / 60).toFixed(1)} min, written in ${fmtTime((performance.now() - t0) / 1000)})`);
+    if (job.cue) {
+      const entries = [];
+      for (const r of rendered) entries.push({ title: (await trackInfo(r.track)).title, frames: r.length });
+      const cueName = `${job.prefix}.cue`;
+      const out = await openOutput(cueName, 'text/plain');
+      await out.write(cueSheet(name, entries, album, comment));
+      await out.close();
+      log(`Wrote ${cueName}`);
+    }
+  } else {
+    for (const [k, r] of rendered.entries()) {
+      const info = await trackInfo(r.track);
+      const name = `${safeFilename(`${job.prefix}_track_${pad2(r.track.num)} - ${info.title}`)}.${job.fmt.ext}`;
+      const t0 = performance.now();
+      await writeAudioFile(name, job.fmt, [{ r, gain: gain(r) }],
+        { ...base, title: info.title, tracknumber: pad2(r.track.num), tracktotal: String(state.tracks.length) }, picture,
+        (f) => setProgress((k + f) / rendered.length, `Writing ${name} · ${Math.round(f * 100)}%`));
+      log(`Wrote ${name} (${(r.length / SR).toFixed(1)} s, written in ${fmtTime((performance.now() - t0) / 1000)})`);
+    }
+  }
+}
+
+function setRunning(on) {
+  $('generate').disabled = on;
+  $('generate').textContent = on ? 'Generating…' : 'Generate';
+  $('cancel').disabled = !on;
+}
+
+async function generate() {
+  if (state.running) return;
+  let job;
+  try { job = buildJob(); } catch (e) { alert(e.message); return; }
+  state.running = true; state.cancel = false;
+  setRunning(true);
+  $('log').textContent = '';
+  setProgress(0, 'Starting…');
+  const t0 = performance.now();
+  try {
+    await runJob(job);
+    log(`Done in ${fmtTime((performance.now() - t0) / 1000)}.`);
+    setProgress(1, 'Done');
+  } catch (e) {
+    if (e instanceof CancelError) { log('Cancelled.'); setProgress(0, 'Cancelled'); }
+    else { console.error(e); log('Error: ' + (e && e.message ? e.message : e)); setProgress(0, 'Failed'); }
+  } finally {
+    state.running = false;
+    setRunning(false);
+  }
+}
+
+$('generate').addEventListener('click', generate);
+$('cancel').addEventListener('click', () => {
+  state.cancel = true;
+  log('Cancelling…');
+});
+window.addEventListener('beforeunload', (e) => { if (state.running) { e.preventDefault(); e.returnValue = ''; } });
+
+window.ZB = { state, loadMusic, loadBrirs, generate, FlacEncoder };   // hooks for scripted testing
+</script>
+</body>
+</html>
